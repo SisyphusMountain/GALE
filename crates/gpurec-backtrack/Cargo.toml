@@ -1,0 +1,12 @@
+[package]
+name = "gpurec-backtrack"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+numpy = "0.22"
+pyo3 = { version = "0.22", features = ["abi3-py310", "extension-module"] }
+rand = "0.8"

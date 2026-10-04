@@ -1,0 +1,10 @@
+[FAMILIES]
+- fam1
+gene_tree = fam1.nwk
+- fam2
+gene_tree = fam2.nwk
+- fam3
+gene_tree = fam3.nwk
+mapping = fam3.map
+- fam4
+gene_tree = fam4.nwk

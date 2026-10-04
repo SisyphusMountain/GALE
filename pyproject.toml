@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=77", "setuptools-rust>=1.8", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gpurec"
+version = "0.1.0"
+description = "Undated DTL gene tree / species tree reconciliation on a GPU: rate fitting, likelihoods and reconciliation sampling, with AleRax's arguments and output files"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+authors = [{ name = "SisyphusMountain", email = "enzo.marsot@outlook.com" }]
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+dependencies = [
+    "numpy>=1.24",
+    "torch>=2.11",
+    "triton>=3.6",
+    "scipy>=1.10",
+]
+
+# Extra deps for the experiment drivers (not needed by the core library):
+#   experiments/receiver_robustness/archaea_exposure_cv.py -> ete3 (needs six)
+[project.optional-dependencies]
+experiments = ["ete3", "six"]
+
+[project.urls]
+Repository = "https://github.com/SisyphusMountain/gpurec"
+
+[project.scripts]
+gpurec = "gpurec.cli.main:entry"
+
+[tool.setuptools.package-data]
+gpurec = ["config/defaults.toml"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gpurec*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "gpu: requires CUDA + Triton (deselect with -m 'not gpu')",
+    "slow: long-running test",
+    "regression: golden non-regression benchmark (rustree-simulated; skips if rustree/CUDA absent)",
+]

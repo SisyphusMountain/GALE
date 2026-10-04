@@ -1,0 +1,438 @@
+"""Levenberg-Marquardt Newton-CG outer loop using the analytic Gauss-Newton/Fisher HVP.
+
+Each step: forward+backward at theta -> (loss, g, sv); CG solves (M + lambda I) p = -g with the
+matrix-free GGN HVP built from sv; an Armijo backtracking line search on the (deterministic)
+forward loss accepts a step and adapts lambda. The forward is warm-started from the previous E
+throughout (FD-free here: M is analytic).
+"""
+
+from __future__ import annotations
+
+import logging
+import math
+
+import torch
+
+from gpurec.solver.value_and_grad import make_value_and_grad, forward_solve
+from gpurec.solver.hvp.gauss_newton import make_ggn_hvp
+from gpurec.solver.krylov import cg_solve, cg_witness, lanczos_extremes, steihaug_cg
+
+logger = logging.getLogger(__name__)
+
+
+def _fd_hessian_hvp(vg, theta_vec, warm_E, *, eps=1e-5):
+    """True-Hessian HVP via central FD of the gradient (reuses forward+backward, no new kernels).
+
+    The direction is normalized so the FD perturbation magnitude is ``eps`` regardless of the CG
+    vector's scale (CG search directions grow/shrink across iterations).
+    """
+    from gpurec.solver.value_and_grad import free_cuda_cache_if_tight
+
+    base = theta_vec.double()
+
+    def hvp(v):
+        v = v.double()
+        nv = float(torch.linalg.vector_norm(v))
+        if nv == 0.0:
+            return torch.zeros_like(v)
+        u = v / nv
+        free_cuda_cache_if_tight()
+        # avoid `_, gp, _, _ = vg(...)`: it would pin the GB-sized saved dict across calls
+        out = vg((base + eps * u).to(theta_vec.dtype), warm_E=warm_E)
+        gp = out[1].double()
+        del out
+        out = vg((base - eps * u).to(theta_vec.dtype), warm_E=warm_E)
+        gm = out[1].double()
+        del out
+        return nv * (gp - gm) / (2 * eps)
+
+    return hvp
+
+
+def newton_lanczos(static, theta0, receiver_weights, *, sigma=0.01, sigma_floor=1e-4, lanczos_m=10,
+                   nu=1.5, omega=1.5, max_bumps=3, eta_max=0.1, max_cg=40, c1=1e-4, ls_max=25,
+                   gtol=1e-2, max_newton=40, fd_eps=1e-5, lam=0.0, theta_ref=None,
+                   lanczos_refresh=0, ftol=1e-9, hvp_mode="fd", verbose=True,
+                   with_receiver=False, alpha0=None):
+    """Lanczos-initialized, witness-corrected damped Newton descent ("Newton-gradient descent").
+
+    ``with_receiver=True`` runs the JOINT ``(theta, alpha)`` receiver-weight Newton: it delegates to
+    :func:`gpurec.solver.curvature.receiver.newton_joint`, which drives the gauge-projected
+    ``P_z (H + lam I) P_z`` system with the analytic joint exact HVP (Newton steps on ``alpha``, not
+    just ``theta``). ``alpha0`` is the starting receiver logits (defaults to ``receiver_weights``;
+    must be NON-uniform or the receiver curvature is dead). The return is then ``(theta, alpha,
+    history)``. The theta-only path (``with_receiver=False``) is unchanged.
+
+    lam_damp interpolates between Newton (small) and scaled gradient descent (large). It is
+    initialized by the cheap spectral rule ``lam_damp = sigma * lam_max`` (m~10 Lanczos: only
+    lam_max is needed, which converges almost immediately; no lam_min estimation). At runtime the
+    CG negative-curvature witness self-corrects: if CG on ``H_eff + lam_damp*I`` encounters
+    ``d^T A d <= 0``, the direction certifies the damping needed and lam_damp is bumped to
+    ``nu *`` that magnitude and the solve restarted. Steps are globalized by Armijo backtracking
+    on the (deterministic) forward loss; lam_damp decays toward ``sigma_floor*lam_max`` on full
+    steps and grows on backtracked/failed ones.
+
+    ``lam``/``theta_ref`` optionally add the ridge/MAP objective term (as in ``newton_tr``):
+    F = L + lam/2 ||x - theta_ref||^2 with H_eff = H + lam*I — required for a quadratic endgame
+    on this problem's flat-at-the-optimum spectrum. Run in fp64 (pass an fp64 theta0).
+
+    Returns (theta, history); history rows carry loss/F, ||gF||, lam_damp, cg iters/status,
+    witness certificates, alpha, and cumulative gradient-eval count.
+    """
+    if with_receiver:
+        # JOINT (theta, alpha) Newton: delegate to the gauge-projected solver built on the analytic
+        # joint exact HVP. Returns (theta, alpha, history).
+        from gpurec.solver.curvature.receiver import newton_joint
+
+        return newton_joint(
+            static, theta0, receiver_weights if alpha0 is None else alpha0,
+            sigma=sigma, sigma_floor=sigma_floor, lanczos_m=lanczos_m, nu=nu, omega=omega,
+            max_bumps=max_bumps, max_cg=max_cg, c1=c1, ls_max=ls_max, gtol=gtol,
+            max_newton=max_newton, lam=lam, theta_ref=theta_ref, ftol=ftol, verbose=verbose,
+        )
+    S = int((static[0] if isinstance(static, (list, tuple)) else static).species_helpers["S"])
+    theta_shape = tuple(theta0.shape)
+    theta_vec = theta0.reshape(-1).clone()
+    p_dim = theta_vec.numel()
+    # GLOBAL mode carries 3 shared rates (theta0 is (3,)). The exact-HVP tangent kernels are
+    # (S,3)-specific and the [S,3]-configured statics cannot consume a broadcast global theta, so
+    # for a global theta fall back to the finite-difference Hessian built on the (correct,
+    # internally-broadcast) 3-D gradient -- cheap and accurate at this size. Specieswise (S,3)
+    # theta keeps the exact HVP unchanged.
+    if hvp_mode == "exact" and p_dim != S * 3:
+        hvp_mode = "fd"
+        # The 1e-5 default FD step is far below the fp32 gradient noise floor: the central
+        # difference is then dominated by noise, the FD Hessian grows a SPURIOUS negative
+        # eigenvalue, the CG witness reacts by bumping lam to ~lam_max, and the damped descent
+        # crawls. Scale the step to the gradient's precision (~5e-3 fp32, ~6e-6 fp64) so the FD
+        # Hessian matches the analytic one (positive-definite here) and the descent is un-clamped.
+        fd_eps = float(torch.finfo(theta_vec.dtype).eps) ** (1.0 / 3.0)
+    vg = make_value_and_grad(static, receiver_weights, theta_shape=theta_shape)
+    lam_obj = float(lam)
+    x_ref = (theta_vec if theta_ref is None else theta_ref.reshape(-1).to(theta_vec)).double().clone()
+    evals = [0]  # cumulative forward+backward evaluations, tracked via wrapper
+
+    def vg_counted(x, **kw):
+        evals[0] += 1
+        return vg(x, **kw)
+
+    def penalty(x):
+        return 0.5 * lam_obj * float((x.double() - x_ref).norm() ** 2) if lam_obj > 0 else 0.0
+
+    loss, g, sv, warm_E = vg_counted(theta_vec)
+    sv = None
+
+    def make_hvp_eff(x_vec, warm):
+        if hvp_mode == "exact":
+            # analytic exact HVP: one forward+backward builds the per-point adjoint cache,
+            # then every CG iteration costs ~1 tangent-forward + 1 tangent-adjoint sweep
+            from gpurec.solver.hvp.exact import make_exact_hvp
+
+            theta_m = x_vec.reshape(theta_shape)
+            _, sv_pt = forward_solve(static, theta_m, receiver_weights, warm_E=warm)
+            evals[0] += 2  # cache build ~ 1 fwd + 1 bwd
+            h = make_exact_hvp(static, theta_m, receiver_weights, sv_pt)
+        else:
+            h = _fd_hessian_hvp(vg_counted, x_vec, warm, eps=fd_eps)
+        if lam_obj > 0:
+            return lambda v: h(v).double() + lam_obj * v.double()
+        return lambda v: h(v).double()
+
+    # The initial gradient eval (vg_counted above) runs a full forward+backward whose freed scratch
+    # FRAGMENTS the caching-allocator pool. A single exact HVP fits from a clean pool, but the
+    # fragmented pool can't find a contiguous [C,S] (~2.36 GiB on 1007x64) -> the descent OOMs in
+    # step-0 CG even though Lanczos and isolated HVPs pass. empty_cache() unconditionally here
+    # returns the gradient's blocks to the driver so the cache build + CG run on a clean pool.
+    # Cheap once per descent; on fixtures that already fit it is a no-op-cost defrag.
+    if hvp_mode == "exact" and torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    hvp_eff = make_hvp_eff(theta_vec, warm_E)
+    _, lam_max = lanczos_extremes(hvp_eff, p_dim, m=lanczos_m, device=str(theta_vec.device))
+    lam_damp = sigma * lam_max
+    lam_floor = sigma_floor * lam_max
+    lam_ceil = 10.0 * lam_max
+    if verbose:
+        logger.debug(f"[lanczos-newton] m={lanczos_m}  lam_max~{lam_max:.2f}  "
+              f"lam_damp0={lam_damp:.4f}  floor={lam_floor:.2e}  ceil={lam_ceil:.1f}")
+
+    history = []
+    accepted_steps = 0
+    stalls = 0
+    # hvp_eff was just built for the current theta_vec (the Lanczos build above), so it is NOT
+    # stale entering the loop -- the k=0 rebuild is redundant (theta unchanged) and its
+    # free-old+build-new churn spikes the memory high-water mark, which OOMs the descent on the
+    # big fixtures even though a single HVP fits. Only rebuild after theta_vec actually moves.
+    hvp_stale = False
+    for k in range(int(max_newton)):
+        gF = g.double() + (lam_obj * (theta_vec.double() - x_ref) if lam_obj > 0 else 0.0)
+        F = loss + penalty(theta_vec)
+        gnorm = float(torch.linalg.vector_norm(gF))
+        rec = {"newton": k, "loss": loss, "F": F, "gnorm": gnorm, "lam_damp": lam_damp,
+               "witness_certs": [], "evals": evals[0]}
+        history.append(rec)
+        if verbose:
+            logger.debug(f"[ln {k:2d}] F={F:.6f}  ||gF||={gnorm:.4e}  lam={lam_damp:.3e}")
+        if gnorm < gtol:
+            if verbose:
+                logger.debug("  converged")
+            break
+
+        # rebuild the HVP cache only when theta_vec has moved since it was built. Dropping the
+        # previous closure (which pins its GB-sized cached forward sv) and returning those blocks to
+        # the driver BEFORE building the next point's cache keeps only one point's forward
+        # intermediates live at once (else the backward's driver-free scratch gate trips on the big
+        # fixtures). A periodic lanczos_refresh also forces a rebuild to re-estimate lam_max.
+        from gpurec.solver.value_and_grad import free_cuda_cache_if_tight
+        do_refresh = bool(lanczos_refresh and accepted_steps
+                          and accepted_steps % int(lanczos_refresh) == 0)
+        if hvp_stale or do_refresh:
+            hvp_eff = None
+            # higher threshold than the default 4 GiB: the inter-step line searches + gradient eval
+            # re-fragment the pool, so on the tight big fixtures (1007x64) defrag before the rebuild
+            # to keep a contiguous [C,S] available. On roomy fixtures (666x80, >8 GiB free) this is a
+            # no-op (skips empty_cache), so it does not slow them.
+            free_cuda_cache_if_tight(min_free_gib=8.0)
+            hvp_eff = make_hvp_eff(theta_vec, warm_E)
+            hvp_stale = False
+            if do_refresh:
+                _, lam_max = lanczos_extremes(hvp_eff, p_dim, m=lanczos_m, device=str(theta_vec.device))
+                lam_floor = sigma_floor * lam_max
+                lam_ceil = 10.0 * lam_max
+
+        # damped solve with witness self-correction
+        eta = min(eta_max, gnorm ** 0.5)
+        p, cg_iters, status = None, 0, ""
+        for bump in range(int(max_bumps) + 1):
+            Av = lambda v: hvp_eff(v) + lam_damp * v
+            p, cg_iters, status, cert = cg_witness(Av, -gF, tol=eta * gnorm, max_iter=max_cg)
+            if status != "neg_curv":
+                break
+            new_lam = nu * (lam_damp - cert)  # cert <= 0 is the damped Rayleigh quotient
+            rec["witness_certs"].append(lam_damp - cert)
+            if verbose:
+                logger.debug(f"      witness: d^T(H+lam)d/|d|^2={cert:.3e} -> lam {lam_damp:.3e} -> {new_lam:.3e}")
+            lam_damp = min(lam_ceil, new_lam)
+        if status == "neg_curv":  # bumps exhausted
+            p = -gF / lam_damp
+            status = "fallback_gd"
+        rec["cg"] = cg_iters
+        rec["status"] = status
+
+        gp = float(torch.dot(gF, p))
+        if gp >= 0.0:
+            p = -gF / lam_damp
+            gp = -gnorm * gnorm / lam_damp
+            status += "+gd"
+
+        # Armijo backtracking on the deterministic forward loss
+        alpha, accepted, sv_t = 1.0, False, None
+        for _ in range(int(ls_max)):
+            trial = (theta_vec.double() + alpha * p).to(theta_vec.dtype)
+            lt, st = forward_solve(static, trial.reshape(theta_shape), receiver_weights, warm_E=warm_E)
+            Ft = float(lt) + penalty(trial)
+            # A step large enough to leave the E-step's contractive region makes forward_solve
+            # return a non-finite loss (survival normalization diverges -> NLL -> -inf). Armijo
+            # `Ft <= F + ...` would then *accept* it, since -inf <= (finite) is True, cascading the
+            # whole polish to F=-inf and breaking the adjoint solve. Require a finite Ft so such a
+            # step is rejected and the search backtracks (or fails cleanly and bumps lambda).
+            if math.isfinite(Ft) and Ft <= F + c1 * alpha * gp:
+                accepted, sv_t = True, st
+                break
+            alpha *= 0.5
+        rec["alpha"] = alpha if accepted else None
+
+        if accepted:
+            accepted_steps += 1
+            theta_vec = trial
+            hvp_stale = True  # theta moved -> the cached HVP must be rebuilt next iteration
+            # multi-batch forward_solve returns saved=None (streams+frees the ~GB intermediates);
+            # fall back to a cold warm-start (correct, just no warm-start speedup). Single-batch
+            # sv_t is a real dict, so this guard is a no-op there.
+            warm_E = sv_t["E"] if sv_t is not None else None
+            sv_t = None
+            lam_damp = max(lam_floor, lam_damp / omega) if alpha == 1.0 else min(lam_ceil, 1.5 * lam_damp)
+            if verbose:
+                logger.debug(f"  cg={cg_iters}({status})  a={alpha:.2e}  dF={Ft - F:+.4e}")
+            # accepted improvements at the forward solver's truncation floor are noise; two in a
+            # row means further polishing cannot be validated -- stop instead of micro-stepping
+            stalls = stalls + 1 if (F - Ft) <= ftol * max(1.0, abs(F)) else 0
+            if stalls >= 2:
+                if verbose:
+                    logger.debug(f"[ln {k + 1:2d}] improvement below ftol floor twice -- stopping")
+                break
+            loss, g, sv, warm_E = vg_counted(theta_vec, warm_E=warm_E)
+            sv = None
+        else:
+            lam_damp = min(lam_ceil, 4.0 * lam_damp)
+            if verbose:
+                logger.debug(f"  cg={cg_iters}({status})  line-search failed -> lam={lam_damp:.3e}")
+            if lam_damp >= lam_ceil:
+                if verbose:
+                    logger.debug("  lam at ceiling with no accepted step -- stopping")
+                break
+
+    return theta_vec.reshape(theta_shape), history
+
+
+def newton_tr(static, theta0, receiver_weights, *, curvature="fd_hessian", max_newton=30, gtol=1e-2,
+              delta0=1.0, delta_max=1e3, eta_accept=0.05, max_cg=40, fd_eps=1e-5,
+              lam=0.0, theta_ref=None, verbose=True, hvp_kwargs=None):
+    """Trust-region Newton-CG (Steihaug): negative curvature is followed to the trust boundary
+    instead of being damped away, which is what an indefinite/saddle start needs.
+
+    With ``lam > 0`` minimizes the ridge/MAP objective ``F = L + lam/2 ||x - theta_ref||^2``
+    (theta_ref defaults to theta0): H+lam*I is PD for lam past the spectrum's negative edge, which
+    restores the quadratic Newton endgame on this problem's flat/indefinite landscape. ``gtol``
+    then applies to ||grad F||.
+
+    Runs in the dtype of ``theta0`` (use fp64: the loss is then precise, so the acceptance ratio
+    test is exact, and the backward's atomic noise is negligible). Returns (theta, history).
+    """
+    S = int((static[0] if isinstance(static, (list, tuple)) else static).species_helpers["S"])
+    theta_vec = theta0.reshape(-1).clone()
+    vg = make_value_and_grad(static, receiver_weights)
+    hvp_kwargs = hvp_kwargs or {}
+    delta = float(delta0)
+    lam = float(lam)
+    x_ref = (theta_vec if theta_ref is None else theta_ref.reshape(-1).to(theta_vec)).double().clone()
+    warm_E = None
+    history = []
+    rejects = 0
+
+    def penalty(x):
+        return 0.5 * lam * float((x.double() - x_ref).norm() ** 2) if lam > 0 else 0.0
+
+    loss, g, sv, warm_E = vg(theta_vec, warm_E=warm_E)
+    for k in range(int(max_newton)):
+        if curvature != "ggn":
+            sv = None  # only the GGN curvature needs the saved intermediates; they are ~GBs
+        from gpurec.solver.value_and_grad import free_cuda_cache_if_tight
+        free_cuda_cache_if_tight()
+        gF = g.double() + (lam * (theta_vec.double() - x_ref) if lam > 0 else 0.0)
+        F = loss + penalty(theta_vec)
+        gnorm = float(torch.linalg.vector_norm(gF))
+        history.append({"newton": k, "loss": loss, "F": F, "gnorm": gnorm, "delta": delta})
+        if verbose:
+            logger.debug(f"[tr {k:2d}] F={F:.6f}  ||gF||={gnorm:.4e}  delta={delta:.2e}")
+        if gnorm < gtol:
+            if verbose:
+                logger.debug("  converged")
+            break
+
+        theta = theta_vec.reshape(S, 3)
+        if curvature == "fd_hessian":
+            hvp = _fd_hessian_hvp(vg, theta_vec, warm_E, eps=fd_eps)
+        elif curvature == "ggn":
+            hvp = make_ggn_hvp(static, theta, receiver_weights, sv, **hvp_kwargs)
+        else:
+            raise ValueError(f"unknown curvature {curvature!r}")
+
+        eta = min(0.1, gnorm ** 0.5)
+        Av = (lambda x: hvp(x).double() + lam * x) if lam > 0 else (lambda x: hvp(x).double())
+        p, Hp, cg_iters, status = steihaug_cg(Av, -gF, delta, tol=eta * gnorm, max_iter=max_cg)
+        pred = float(torch.dot(-gF, p)) - 0.5 * float(torch.dot(p, Hp))
+        pnorm = float(torch.linalg.vector_norm(p))
+
+        trial = (theta_vec.double() + p).to(theta_vec.dtype)
+        loss_t, sv_t = forward_solve(static, trial.reshape(S, 3), receiver_weights, warm_E=warm_E)
+        loss_t = float(loss_t)
+        ared = F - (loss_t + penalty(trial))
+        rho = ared / pred if pred > 0 else -1.0
+
+        if rho < 0.25:
+            delta = 0.25 * pnorm
+        elif rho > 0.75 and pnorm >= 0.99 * delta:
+            delta = min(2.0 * delta, delta_max)
+
+        if rho > eta_accept and ared > 0:
+            rejects = 0
+            theta_vec = trial
+            warm_E = sv_t["E"]
+            sv_t = None  # release trial intermediates before the next full forward+backward
+            if verbose:
+                logger.debug(f"  cg={cg_iters}({status})  |p|={pnorm:.2e}  rho={rho:.2f}  dL={-ared:+.4e}")
+            loss, g, sv, warm_E = vg(theta_vec, warm_E=warm_E)
+        else:
+            rejects += 1
+            if verbose:
+                logger.debug(f"  cg={cg_iters}({status})  |p|={pnorm:.2e}  rho={rho:.2f}  REJECT")
+            # consecutive rejects with shrinking radius = the quadratic model can no longer be
+            # validated against the forward solver's truncation noise -> converged to the floor
+            if delta < 1e-10 or rejects >= 3:
+                if verbose:
+                    logger.debug("  stalled at solver precision floor" if rejects >= 3 else "  trust region collapsed")
+                break
+
+    return theta_vec.reshape(S, 3), history
+
+
+def newton_cg(static, theta0, receiver_weights, *, curvature="ggn", max_newton=25, gtol=1e-2,
+              lam0=1.0, lam_min=1e-7, lam_max=1e10, max_cg=30, eta_max=0.1, c1=1e-4, ls_max=25,
+              fd_eps=1e-5, verbose=True, hvp_kwargs=None):
+    """Minimize the NLL over theta with LM-damped Newton-CG. Returns (theta, history).
+
+    ``curvature='ggn'`` uses the analytic Gauss-Newton/Fisher HVP (PSD); ``'fd_hessian'`` uses the
+    true Hessian via central FD of the gradient (indefinite away from a minimum).
+    """
+    S = int((static[0] if isinstance(static, (list, tuple)) else static).species_helpers["S"])
+    theta_vec = theta0.reshape(-1).clone()
+    vg = make_value_and_grad(static, receiver_weights)
+    hvp_kwargs = hvp_kwargs or {}
+    lam = float(lam0)
+    warm_E = None
+    history = []
+
+    for k in range(int(max_newton)):
+        loss, g, sv, warm_E = vg(theta_vec, warm_E=warm_E)
+        g64 = g.double()
+        gnorm = float(torch.linalg.vector_norm(g64))
+        history.append({"newton": k, "loss": loss, "gnorm": gnorm, "lam": lam})
+        if verbose:
+            logger.debug(f"[newton {k:2d}] loss={loss:.6f}  ||g||={gnorm:.4e}  lam={lam:.2e}")
+        if gnorm < gtol:
+            if verbose:
+                logger.debug("  converged")
+            break
+
+        theta = theta_vec.reshape(S, 3)
+        if curvature == "ggn":
+            hvp = make_ggn_hvp(static, theta, receiver_weights, sv, **hvp_kwargs)
+        elif curvature == "fd_hessian":
+            hvp = _fd_hessian_hvp(vg, theta_vec, warm_E, eps=fd_eps)
+        else:
+            raise ValueError(f"unknown curvature {curvature!r}")
+        eta = min(eta_max, gnorm ** 0.5)
+
+        def Av(x):
+            return hvp(x).double() + lam * x
+
+        p, cg_iters, conv = cg_solve(Av, -g64, tol=eta * gnorm, max_iter=max_cg)
+        gp = float(torch.dot(g64, p))
+        if gp >= 0.0:  # not a descent direction (CG failure); fall back to steepest descent
+            p = -g64
+            gp = -gnorm * gnorm
+
+        alpha, accepted, loss_trial, sv_trial = 1.0, False, loss, None
+        for _ in range(int(ls_max)):
+            tt = (theta_vec + alpha * p).to(theta_vec.dtype)
+            lt, st = forward_solve(static, tt.reshape(S, 3), receiver_weights, warm_E=warm_E)
+            loss_trial = float(lt)
+            if loss_trial <= loss + c1 * alpha * gp:
+                accepted, sv_trial = True, st
+                break
+            alpha *= 0.5
+
+        if accepted:
+            theta_vec = (theta_vec + alpha * p).to(theta_vec.dtype)
+            warm_E = sv_trial["E"]
+            lam = max(lam_min, lam * (0.4 if alpha == 1.0 else 1.5))
+            if verbose:
+                logger.debug(f"  cg={cg_iters}{'' if conv else '*'}  a={alpha:.2e}  d_loss={loss_trial - loss:+.4e}")
+        else:
+            lam = min(lam_max, lam * 8.0)
+            if verbose:
+                logger.debug(f"  cg={cg_iters}  line-search failed -> lam={lam:.2e}")
+            if lam >= lam_max:
+                break
+
+    return theta_vec.reshape(S, 3), history

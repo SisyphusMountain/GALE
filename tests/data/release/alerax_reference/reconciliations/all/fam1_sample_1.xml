@@ -1,0 +1,148 @@
+<recPhylo 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.recg.org ./recGeneTreeXML.xsd"
+	xmlns="http://www.recg.org">
+<spTree>
+<phylogeny>
+<clade>
+	<name>Node_5_9_0</name>
+	<clade>
+		<name>Node_5_13_0</name>
+		<clade>
+			<name>Node_5_11_0</name>
+			<clade>
+				<name>5</name>
+			</clade>
+			<clade>
+				<name>Node_11_12_0</name>
+				<clade>
+					<name>11</name>
+				</clade>
+				<clade>
+					<name>12</name>
+				</clade>
+			</clade>
+		</clade>
+		<clade>
+			<name>Node_13_14_0</name>
+			<clade>
+				<name>13</name>
+			</clade>
+			<clade>
+				<name>14</name>
+			</clade>
+		</clade>
+	</clade>
+	<clade>
+		<name>Node_9_8_0</name>
+		<clade>
+			<name>Node_9_10_0</name>
+			<clade>
+				<name>9</name>
+			</clade>
+			<clade>
+				<name>10</name>
+			</clade>
+		</clade>
+		<clade>
+			<name>8</name>
+		</clade>
+	</clade>
+</clade>
+</phylogeny>
+</spTree>
+<recGeneTree>
+<phylogeny rooted="true">
+<clade>
+	<name>NULL</name>
+	<eventsRec>
+		<speciation speciesLocation="Node_5_9_0"/>
+	</eventsRec>
+	<clade>
+		<name>NULL</name>
+		<eventsRec>
+			<speciation speciesLocation="Node_5_13_0"/>
+		</eventsRec>
+		<clade>
+			<name>NULL</name>
+			<eventsRec>
+				<speciation speciesLocation="Node_5_11_0"/>
+			</eventsRec>
+			<clade>
+				<name>5_6</name>
+				<eventsRec>
+					<leaf speciesLocation="5"/>
+				</eventsRec>
+			</clade>
+			<clade>
+				<name>NULL</name>
+				<eventsRec>
+					<speciation speciesLocation="Node_11_12_0"/>
+				</eventsRec>
+				<clade>
+					<name>11_12</name>
+					<eventsRec>
+						<leaf speciesLocation="11"/>
+					</eventsRec>
+				</clade>
+				<clade>
+					<name>12_13</name>
+					<eventsRec>
+						<leaf speciesLocation="12"/>
+					</eventsRec>
+				</clade>
+			</clade>
+		</clade>
+		<clade>
+			<name>NULL</name>
+			<eventsRec>
+				<speciation speciesLocation="Node_13_14_0"/>
+			</eventsRec>
+			<clade>
+				<name>13_14</name>
+				<eventsRec>
+					<leaf speciesLocation="13"/>
+				</eventsRec>
+			</clade>
+			<clade>
+				<name>14_15</name>
+				<eventsRec>
+					<leaf speciesLocation="14"/>
+				</eventsRec>
+			</clade>
+		</clade>
+	</clade>
+	<clade>
+		<name>NULL</name>
+		<eventsRec>
+			<speciation speciesLocation="Node_9_8_0"/>
+		</eventsRec>
+		<clade>
+			<name>NULL</name>
+			<eventsRec>
+				<speciation speciesLocation="Node_9_10_0"/>
+			</eventsRec>
+			<clade>
+				<name>9_10</name>
+				<eventsRec>
+					<leaf speciesLocation="9"/>
+				</eventsRec>
+			</clade>
+			<clade>
+				<name>10_11</name>
+				<eventsRec>
+					<leaf speciesLocation="10"/>
+				</eventsRec>
+			</clade>
+		</clade>
+		<clade>
+			<name>8_9</name>
+			<eventsRec>
+				<leaf speciesLocation="8"/>
+			</eventsRec>
+		</clade>
+	</clade>
+</clade>
+</phylogeny>
+</recGeneTree>
+</recPhylo>

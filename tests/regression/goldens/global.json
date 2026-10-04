@@ -1,0 +1,31 @@
+{
+  "mode": "global",
+  "provenance": {
+    "rustree_commit": "013989429f022e8d8ad8ca1607a3b30d73996cc6",
+    "gpurec_commit": "9bed7ae007b53aaae821768c334fe744e1d62ab8",
+    "seed": 20260709,
+    "n_species": 200,
+    "n_families": 200,
+    "dtl": 0.05,
+    "device": "NVIDIA GeForce RTX 4090",
+    "dtype": "float32",
+    "repeats": 3,
+    "nll_spread": 0.003682847818679935,
+    "rate_spread_rel": 6.681033255517832e-07,
+    "minted_utc": "2026-07-11T13:34:18.003419+00:00",
+    "specieswise_golden_lam": 0.05,
+    "specieswise_golden_init_rate": 0.1
+  },
+  "nll": 101980.22135416667,
+  "rates": [
+    0.0337691605091095,
+    0.03201146423816681,
+    0.03458592668175697
+  ],
+  "recorded_wall_s": 3.3393571890046587,
+  "tolerances": {
+    "nll_rtol": 0.001,
+    "rates_rtol": 0.01,
+    "rates_atol": 0.0001
+  }
+}
