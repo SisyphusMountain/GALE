@@ -101,14 +101,14 @@ def test_cuda_device_message(monkeypatch):
 def test_build_model_matches_model_built_from_files(monkeypatch):
     if not torch.cuda.is_available():
         pytest.skip("needs a CUDA GPU")
-    from gpurec.api.model import DEFAULT_CLADE_BUDGET, GeneReconModel
+    from gpurec.api.model import GeneReconModel
     from gpurec.api.solver_options import SolverOptions
     from gpurec.config import GpurecConfig
 
     monkeypatch.chdir(RELEASE)
     data = _load()
     config = GpurecConfig()
-    built = data.build_model([0], "genewise", SolverOptions(), config, DEFAULT_CLADE_BUDGET)
+    built = data.build_model([0], "genewise", SolverOptions(), config, config.batching.clade_budget)
     direct = GeneReconModel("species.nwk", ["fam1.nwk"], mode="genewise", config=config)
     theta = torch.log2(torch.tensor([[0.1, 0.2, 0.05]], device="cuda", dtype=built.theta.dtype))
     a = float(built.genewise_loss_vector(theta=theta)[0])
@@ -127,7 +127,7 @@ def test_build_model_wires_fraction_missing_from_file(tmp_path, monkeypatch):
     leaf_fm_log would be wrong for one of the two builds without either one erroring."""
     if not torch.cuda.is_available():
         pytest.skip("needs a CUDA GPU")
-    from gpurec.api.model import DEFAULT_CLADE_BUDGET, GeneReconModel
+    from gpurec.api.model import GeneReconModel
     from gpurec.api.solver_options import SolverOptions
     from gpurec.config import GpurecConfig
 
@@ -142,7 +142,7 @@ def test_build_model_wires_fraction_missing_from_file(tmp_path, monkeypatch):
         "14": 0.25, "9": 0.30, "10": 0.35, "8": 0.40,
     }
     config = GpurecConfig()
-    built = data.build_model([0], "genewise", SolverOptions(), config, DEFAULT_CLADE_BUDGET)
+    built = data.build_model([0], "genewise", SolverOptions(), config, config.batching.clade_budget)
     direct = GeneReconModel(
         "species.nwk", ["fam1.nwk"], mode="genewise", config=config,
         fraction_missing=data.fraction_missing,

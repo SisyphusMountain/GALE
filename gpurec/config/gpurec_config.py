@@ -7,6 +7,7 @@ from pathlib import Path
 import torch
 
 from gpurec.api.solver_options import SolverOptions
+from gpurec.config.batching import BatchingOptions
 from gpurec.config.memory import MemoryOptions
 from gpurec.config.newton import NewtonOptions
 from gpurec.config.precision import PrecisionOptions
@@ -119,6 +120,7 @@ class GpurecConfig:
     rates: RateBounds = field(default_factory=RateBounds)
     regularizer: PenaltyOptions = field(default_factory=_default_penalty_options)
     memory: MemoryOptions = field(default_factory=MemoryOptions)
+    batching: BatchingOptions = field(default_factory=BatchingOptions)
 
     def validate(self) -> None:
         """Delegate to every sub-option's own ``validate`` (when it defines one)."""
@@ -129,6 +131,7 @@ class GpurecConfig:
             self.rates,
             self.regularizer,
             self.memory,
+            self.batching,
         ):
             validate_fn = getattr(sub, "validate", None)
             if callable(validate_fn):
@@ -145,7 +148,9 @@ class GpurecConfig:
         Any key -- top-level or nested -- that does not correspond to an
         existing field raises ``ValueError`` rather than being ignored.
         """
-        return _merge_into(cls(), d, path="")
+        config = _merge_into(cls(), d, path="")
+        config.validate()
+        return config
 
     @classmethod
     def genewise_reference(cls) -> "GpurecConfig":
@@ -271,4 +276,6 @@ def load_fit_config(path: str | Path | None) -> GpurecConfig:
             f"{path}: [solver] {', '.join(sorted(bad_solver))} has no effect on fitting in "
             "gpurec 0.1; remove it"
         )
-    return _merge_into(base, overrides, path="")
+    config = _merge_into(base, overrides, path="")
+    config.validate()
+    return config

@@ -29,7 +29,7 @@ import time
 
 import torch
 
-from gpurec.api.model import DEFAULT_CLADE_BUDGET, cuda_device
+from gpurec.api.model import cuda_device
 from gpurec.api.solver_options import SolverOptions
 from gpurec.config import GpurecConfig
 from gpurec.core.inference.solver import solve_forward_residual
@@ -55,7 +55,7 @@ _BASE_SOLVER = {
 # Per-dataset values belong in your experiment script, NOT edited here (see docs/config_convention.md).
 GENEWISE_REFERENCE = dict(
     adam_steps=5, adam_lr=1.0, grad_clip=10.0, pi_tiers=(16, 64), neu_opt=16, neu_cert=64,
-    clade_budget=None, tol=1e-3, max_iter=120, check_every=4, drop_frac=0.30, trust=2.0,
+    tol=1e-3, max_iter=120, check_every=4, drop_frac=0.30, trust=2.0,
     mu=1e-2, fwd_tol=1e-3, improve_frac=0.8, verify_drop=True, eager_defer=True,
     warm_adjoint=True, certify=False,
 )
@@ -105,7 +105,6 @@ def fit_genewise(
     pi_tiers=(16, 64),
     neu_opt: int = 16,
     neu_cert: int = 64,
-    clade_budget: int | None = None,
     tol: float = 1e-3,
     max_iter: int = 120,
     check_every: int = 4,
@@ -155,7 +154,7 @@ def fit_genewise(
     def build(indices, pi, neu, warm):
         m = data.build_model(
             list(indices), "genewise", sopts(pi, neu, warm), config,
-            DEFAULT_CLADE_BUDGET if clade_budget is None else clade_budget,
+            config.batching.clade_budget,
         )
         m.receiver_weights.requires_grad_(False)   # uniform transfer recipients (UndatedDTL default)
         return m

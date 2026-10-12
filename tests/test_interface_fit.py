@@ -98,7 +98,6 @@ def test_fit_over_several_batches_matches_one_batch_evaluation(tmp_path, monkeyp
     import shutil
 
     from gpurec import fit, interface, load_families, load_fit_config
-    from gpurec.fit import genewise_fit, global_fit
 
     lines = ["[FAMILIES]"]
     for name in ("fam1.nwk", "fam2.nwk", "fam3.nwk", "fam3.map", "species.nwk"):
@@ -128,8 +127,7 @@ def test_fit_over_several_batches_matches_one_batch_evaluation(tmp_path, monkeyp
 
     with monkeypatch.context() as patch:
         # Each family has 27 to 39 clades; a budget of 80 clades per batch gives several batches.
-        for module in (interface, global_fit, genewise_fit):
-            patch.setattr(module, "DEFAULT_CLADE_BUDGET", 80)
+        config.batching.clade_budget = 80
         patch.setattr(FamilyData, "build_model", recording_build_model)
         fitted = fit(data, parametrization=parametrization, start_rates=(0.1, 0.1, 0.1), config=config)
         assert len(fitted.model.batch_statics) > 1

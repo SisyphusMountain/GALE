@@ -25,7 +25,7 @@ import time
 
 import torch
 
-from gpurec.api.model import DEFAULT_CLADE_BUDGET, cuda_device
+from gpurec.api.model import cuda_device
 from gpurec.api.solver_options import SolverOptions
 from gpurec.config import GpurecConfig
 from gpurec.optimization import clamp_log_rate_, log2_rate_bounds, project_rate_gradient_
@@ -68,7 +68,7 @@ def fit_global(data, *, start_log2_rates, config: GpurecConfig,
     device = cuda_device()
     model = data.build_model(
         list(range(data.n_families)), "genewise", _tier_solver_options(config, fit_pi, fit_neu),
-        config, DEFAULT_CLADE_BUDGET,
+        config, config.batching.clade_budget,
     )
     dtype = model.dtype
     G = model.theta.shape[0]
@@ -144,7 +144,7 @@ def fit_global(data, *, start_log2_rates, config: GpurecConfig,
         torch.cuda.empty_cache()
         eval_model = data.build_model(
             list(range(data.n_families)), "genewise", _tier_solver_options(config, eval_pi, eval_neu),
-            config, DEFAULT_CLADE_BUDGET,
+            config, config.batching.clade_budget,
         )
     else:
         eval_model = model

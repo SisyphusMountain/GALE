@@ -35,7 +35,6 @@ def _mode_flags(mode: str) -> tuple[bool, bool]:
 
 # Batching layout of GeneReconModel. Named here once so FamilyData.build_model uses the same values.
 DEFAULT_FAMILY_CHUNK_SIZE = 300
-DEFAULT_CLADE_BUDGET = 315_000
 DEFAULT_BATCH_PACKING = "depth_first_fit"
 DEFAULT_MAX_WAVE_SIZE = 8192
 
@@ -65,7 +64,7 @@ class GeneReconModel(torch.nn.Module):
         *,
         mode: str = "global",
         family_chunk_size: int | None = DEFAULT_FAMILY_CHUNK_SIZE,
-        clade_budget: int | None = DEFAULT_CLADE_BUDGET,
+        clade_budget: int,
         batch_packing: str = DEFAULT_BATCH_PACKING,
         max_wave_size: int = DEFAULT_MAX_WAVE_SIZE,
         solver_options: SolverOptions | dict | None = None,

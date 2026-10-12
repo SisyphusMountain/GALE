@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 
 import torch
 
-from gpurec.api.model import DEFAULT_CLADE_BUDGET, GeneReconModel
+from gpurec.api.model import GeneReconModel
 from gpurec.config import GpurecConfig
 from gpurec.data import FamilyData
 from gpurec.fit.genewise_fit import fit_genewise
@@ -58,7 +58,7 @@ def _check_parametrization(parametrization: str) -> None:
 def _result(data, parametrization, log2_rates, config, history, wall_seconds) -> FitResult:
     model = data.build_model(
         list(range(data.n_families)), "genewise", replace(config.solver, warm_adjoint=False), config,
-        DEFAULT_CLADE_BUDGET,
+        config.batching.clade_budget,
     )
     with torch.no_grad():
         model.theta.copy_(log2_rates.to(device=model.theta.device, dtype=model.theta.dtype))

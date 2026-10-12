@@ -91,3 +91,8 @@ min_free_gib_driver = 4.0
 min_free_gib_hvp = 8.0
 free_cache_every = 32
 grad_avg_k = 1
+
+[batching]
+# Most clades one batch may hold, for every fit and evaluation. Raising it fills the GPU with fewer,
+# larger batches; it must still fit the card's memory (an out-of-memory error stops the run).
+clade_budget = 315000
