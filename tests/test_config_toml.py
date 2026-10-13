@@ -196,12 +196,15 @@ def test_load_fit_config_accepts_a_solver_table_with_only_e_max_iter(tmp_path):
     assert cfg.solver.e_max_iter == 200
 
 
-def test_load_fit_config_rejects_use_hvp_warm_start(tmp_path):
-    # The per-family fit builds its SolverOptions from a fixed key whitelist that
-    # excludes use_hvp_warm_start (gpurec/fit/genewise_fit.py's _BASE_SOLVER), so a
-    # config value never reaches it; the global fit never computes an HVP at all.
-    # It has no effect on any fit/evaluate/sampling path, so it is rejected too.
-    p = tmp_path / "bad.toml"
+def test_load_fit_config_accepts_use_hvp_warm_start_and_the_per_family_fit_reads_it(tmp_path):
+    # The per-family fit builds its SolverOptions from the keys of _BASE_SOLVER
+    # (gpurec/fit/genewise_fit.py); use_hvp_warm_start is one of them, so the value of the
+    # config file reaches the exact Hessian. (Switching it off keeps the exact Hessian from
+    # holding one warm-start array per batch and per probe, which runs out of memory on a
+    # 24 GB card when the batches are small.)
+    from gpurec.fit.genewise_fit import _BASE_SOLVER
+    p = tmp_path / "ok.toml"
     p.write_text("[solver]\nuse_hvp_warm_start = false\n")
-    with pytest.raises(ValueError, match="use_hvp_warm_start"):
-        load_fit_config(p)
+    cfg = load_fit_config(p)
+    assert cfg.solver.use_hvp_warm_start is False
+    assert "use_hvp_warm_start" in _BASE_SOLVER

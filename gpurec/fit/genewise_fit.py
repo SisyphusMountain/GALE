@@ -47,6 +47,7 @@ _BASE_SOLVER = {
         "e_max_iter", "e_tol",
         "e_adjoint_max_iter", "e_adjoint_tol",
         "adjoint_pruning_threshold", "use_adjoint_pruning", "pibar_side_threshold",
+        "use_hvp_warm_start",
     )
 }
 

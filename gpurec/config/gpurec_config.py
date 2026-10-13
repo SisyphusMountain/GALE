@@ -243,13 +243,10 @@ _INERT_RATE_KEYS_FOR_FITTING = {"init_rate"}
 #   - ``e_tangent_tol``: the only place that reads it (``gpurec/core/kernels/e_step_tangent.py``)
 #     reads it from a fresh ``SolverOptions()``, never from the configured/per-family ``SolverOptions``
 #     a fit actually runs with.
-#   - ``use_hvp_warm_start``: read by ``gpurec/solver/hvp/exact.py``, but the per-family fit
-#     (``gpurec/fit/genewise_fit.py``'s ``_BASE_SOLVER``) builds its ``SolverOptions`` from a fixed
-#     key whitelist that excludes it, so a configured value never reaches the per-family fit's HVP
-#     computation (it always uses the dataclass default). The global fit's Hessian is finite-difference,
-#     not analytic-HVP, so it never reads this field either. The final evaluation and reconciliation
-#     sampling compute no HVP at all.
-_INERT_SOLVER_KEYS_FOR_FITTING = {"e_tangent_tol", "use_hvp_warm_start"}
+# ``use_hvp_warm_start`` is read by ``gpurec/solver/hvp/exact.py`` and reaches it through the per-family
+# fit's ``_BASE_SOLVER`` (``gpurec/fit/genewise_fit.py``). The global fit's Hessian is finite-difference,
+# so there it has no effect; the final evaluation and reconciliation sampling compute no HVP.
+_INERT_SOLVER_KEYS_FOR_FITTING = {"e_tangent_tol"}
 
 
 def load_fit_config(path: str | Path | None) -> GpurecConfig:

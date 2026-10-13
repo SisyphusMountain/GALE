@@ -303,10 +303,13 @@ its default. The sections that take effect when fitting or evaluating are:
   fitting starts from `--d`/`--l`/`--t` (`start_rates` in Python), never
   from `init_rate`.
 - `[solver]`: settings of the fixed-point and gradient solvers.
-  `e_tangent_tol` and `use_hvp_warm_start` are rejected with an error: no
-  fit, evaluation or sampling step in gpurec 0.1 reads either one from the
-  config file. Which of the remaining keys have an effect depends on the
-  step:
+  `e_tangent_tol` is rejected with an error: no fit, evaluation or sampling
+  step in gpurec 0.1 reads it from the config file. `use_hvp_warm_start`
+  is read by the per-family fit's exact Hessian (it has no effect on the
+  global fit, whose Hessian is finite-difference): set it to `false` when
+  batches are small (`[batching] clade_budget` well below the default),
+  because the warm start keeps one array per batch and per probe on the
+  card. Which of the remaining keys have an effect depends on the step:
   - The final likelihoods (`per_fam_likelihoods.txt`,
     `result.log_likelihoods`) and the reconciliation samples use the
     `[solver]` values as written, except `warm_adjoint`, which is off

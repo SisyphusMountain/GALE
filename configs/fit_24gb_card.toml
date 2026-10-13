@@ -1,0 +1,12 @@
+# Per-family fit on a card with 24 GB of memory (measured on an RTX 4090, full HOGENOM set).
+#
+# clade_budget: batches of at most 80,000 clades keep the scratch space small enough that the
+# adjoint warm start can be used once the active set has shrunk; the default (315,000) leaves no room
+# for it, so every adjoint solve starts cold.
+# use_hvp_warm_start: with small batches the exact Hessian would keep one warm-start array per batch
+# and per probe on the card and run out of memory, so it is switched off.
+[solver]
+use_hvp_warm_start = false
+
+[batching]
+clade_budget = 80000
