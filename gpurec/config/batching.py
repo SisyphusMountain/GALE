@@ -12,7 +12,7 @@ from dataclasses import dataclass
 @dataclass
 class BatchingOptions:
     """``clade_budget``: the most clades one batch may hold (a whole number of at least 1)."""
-    clade_budget: int = 315_000
+    clade_budget: int
 
     def validate(self) -> None:
         value = self.clade_budget

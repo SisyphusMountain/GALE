@@ -88,6 +88,8 @@ def main(argv: list[str]) -> int:
         config = load_fit_config(args.config)
         if args.precision is not None:
             config.precision.model_dtype = args.precision
+        if args.clade_budget is not None:
+            config.batching.clade_budget = args.clade_budget
         config.validate()
         data = load_families(
             families=args.families,

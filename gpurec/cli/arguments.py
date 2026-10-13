@@ -57,6 +57,7 @@ class RunArguments:
     skip_family_filtering: bool
     verbose_opt: bool
     precision: str | None
+    clade_budget: int | None
     config: Path | None
 
 
@@ -109,6 +110,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--precision", choices=("float32", "float64"),
                         help="gpurec only: floating-point precision (default: from the config file)")
     parser.add_argument("--config", help="gpurec only: TOML file with solver, precision and rate settings")
+    parser.add_argument("--clade-budget", type=int,
+                        help="gpurec only: most clades per batch (default: [batching] clade_budget in defaults.toml)")
     return parser
 
 
@@ -165,5 +168,6 @@ def parse_arguments(argv: list[str]) -> RunArguments:
         skip_family_filtering=args.skip_family_filtering,
         verbose_opt=args.verbose_opt,
         precision=args.precision,
+        clade_budget=args.clade_budget,
         config=None if args.config is None else Path(args.config),
     )

@@ -39,6 +39,17 @@ DEFAULTS_TOML_PATH = Path(__file__).resolve().parent / "defaults.toml"
 # imports of its own), so it stays a normal top-level import.
 
 
+def _defaults_section(cls, section: str):
+    """The ``[section]`` table of ``defaults.toml`` as a ``cls``: every field must be in the table
+    and no other key is accepted (the file is the only place the shipped value lives)."""
+    with open(DEFAULTS_TOML_PATH, "rb") as fh:
+        table = tomllib.load(fh)[section]
+    names = {f.name for f in fields(cls)}
+    if set(table) != names:
+        raise ValueError(f"[{section}] in {DEFAULTS_TOML_PATH} must set exactly {sorted(names)}")
+    return cls(**table)
+
+
 def _default_penalty_options():
     from gpurec.solver.penalties import PenaltyOptions
     return PenaltyOptions()
@@ -120,7 +131,7 @@ class GpurecConfig:
     rates: RateBounds = field(default_factory=RateBounds)
     regularizer: PenaltyOptions = field(default_factory=_default_penalty_options)
     memory: MemoryOptions = field(default_factory=MemoryOptions)
-    batching: BatchingOptions = field(default_factory=BatchingOptions)
+    batching: BatchingOptions = field(default_factory=lambda: _defaults_section(BatchingOptions, "batching"))
 
     def validate(self) -> None:
         """Delegate to every sub-option's own ``validate`` (when it defines one)."""

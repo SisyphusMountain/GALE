@@ -67,7 +67,23 @@ def cuda_memory_budget_bytes(
     available_b = int(free_b) + reclaimable_b
     fraction = float(default_fraction)
     reserve_b = int(float(default_reserve_gib) * GIB)
-    return max(0, min(int(total_b * fraction), max(0, available_b - reserve_b)))
+    non_pytorch_b = _non_pytorch_bytes_at_start(idx, total_b)
+    return max(0, min(int(total_b * fraction), max(0, available_b - reserve_b - non_pytorch_b)))
+
+
+# Memory on each card used by something other than PyTorch's caching allocator when the process first
+# asks for the budget (the CUDA context, the desktop, other programs): measured once per device, then
+# kept, so the budget subtracts the same baseline for the whole run.
+_NON_PYTORCH_AT_START: dict[int, int] = {}
+
+
+def _non_pytorch_bytes_at_start(idx: int, total_b: int) -> int:
+    if idx not in _NON_PYTORCH_AT_START:
+        free_b, _ = torch.cuda.mem_get_info(idx)
+        used_b = int(total_b) - int(free_b)
+        pytorch_b = int(torch.cuda.memory_reserved(idx))
+        _NON_PYTORCH_AT_START[idx] = max(0, used_b - pytorch_b)
+    return _NON_PYTORCH_AT_START[idx]
 
 
 def proposal0_wave_scratch_bytes(
