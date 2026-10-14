@@ -25,7 +25,10 @@ e_adjoint_max_iter = 128
 # be expressed in TOML, omitted so the dataclass default is kept.
 adjoint_pruning_threshold = 1e-6
 use_adjoint_pruning = true
-use_hvp_warm_start = true
+# Off: with the clade limit below, the exact Hessian would keep one warm-start array per batch and per
+# probe on the card and the run stopped for lack of memory on an RTX 4090 (24 GB). Measured; see
+# configs/fit_24gb_card.toml.
+use_hvp_warm_start = false
 warm_adjoint = false
 pibar_side_threshold = 0.0
 e_tangent_tol = 1e-9
@@ -95,4 +98,6 @@ grad_avg_k = 1
 [batching]
 # Most clades one batch may hold, for every fit and evaluation. Raising it fills the GPU with fewer,
 # larger batches; it must still fit the card's memory (an out-of-memory error stops the run).
-clade_budget = 315000
+# 80,000: the value with which every run of the paper completed on an RTX 4090 (24 GB); the limit of
+# 315,000 used before stopped for lack of memory on that card. Other cards were not tested.
+clade_budget = 80000

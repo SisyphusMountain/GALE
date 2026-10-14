@@ -60,10 +60,10 @@ def test_genewise_base_solver_matches_factory():
         assert getattr(ref_solver, k) == v
 
 
-def test_solver_options_use_hvp_warm_start_defaults_true():
+def test_solver_options_use_hvp_warm_start_defaults_false():
     from gpurec import SolverOptions
     so = SolverOptions()
-    assert so.use_hvp_warm_start is True
+    assert so.use_hvp_warm_start is False
 
 
 def test_no_reference_to_the_moved_map_cv_module():

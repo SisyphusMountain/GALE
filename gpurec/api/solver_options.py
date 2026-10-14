@@ -28,11 +28,12 @@ class SolverOptions:
     # static.warm_v dict for build_point_cache's own backward pass (no new memory), and (2) caches
     # the tangent-adjoint sweep's own v_k per probe_id in static.warm_v_tangent (new memory, ~probe
     # count x a single warm_v's footprint). Independent of ``warm_adjoint`` above -- its own field,
-    # not shared. Default True: part (1) is pure upside when repeatedly calling make_exact_hvp on the
-    # same static; part (2) only activates when a caller explicitly passes probe_id= to hvp(), so
-    # existing CG/Lanczos-based callers (which never do) are unaffected either way. Set False to
-    # save the warm_v_tangent memory.
-    use_hvp_warm_start: bool = True
+    # not shared. Default False: part (2) keeps one array per batch and per probe on the card, which
+    # ran an RTX 4090 (24 GB) out of memory in the per-family fit (see defaults.toml). Part (1) is
+    # pure upside when repeatedly calling make_exact_hvp on the same static; part (2) only activates
+    # when a caller explicitly passes probe_id= to hvp(), so existing CG/Lanczos-based callers (which
+    # never do) are unaffected either way. Set True to use the warm_v_tangent memory.
+    use_hvp_warm_start: bool = False
     # Keep each wave's solved adjoint between gradient evaluations and start the next backward
     # solve from it. Only used when the memory gate (``warm_adjoint_fits``) says the cache fits.
     warm_adjoint: bool = False
