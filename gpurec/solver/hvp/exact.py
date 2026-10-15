@@ -74,6 +74,9 @@ def build_point_cache(static, theta, col_weights, sv, *, origination_log_probs=N
     cache: dict = {}
     grad_theta, grad_col = vjp_root_to_theta(
         static, sv, None, theta, col_weights, drop_norm=False, cache=cache,
+        neumann_terms=static.solver_options.neumann_terms,
+        use_pruning=static.solver_options.use_adjoint_pruning,
+        e_adjoint_tol=static.solver_options.e_adjoint_tol,
         origination_log_probs=origination_log_probs, origination_probs=origination_probs,
         reserved_scratch_bytes=_warm_reserved_scratch_bytes(static),
         warm_v=warm_v,
@@ -82,7 +85,7 @@ def build_point_cache(static, theta, col_weights, sv, *, origination_log_probs=N
         # HVP's point cache would be fraction-missing-wrong (its first-order gradient would
         # not match the production autograd gradient), corrupting every second-order term
         # built on the cache. vjp_root_to_theta already accepts leaf_fm_log (see gauss_newton.py).
-        leaf_fm_log=getattr(static, "leaf_fm_log", None),
+        leaf_fm_log=static.leaf_fm_log,
     )
     return grad_theta, grad_col, cache
 
@@ -235,7 +238,7 @@ def make_exact_hvp_single(static, theta, col_weights, sv, *, cache=None, debug_o
     # It is E-ONLY: threaded into the E-step primal recomputations + the E-step tangent fixed point
     # so the second-order theta curvature is correct with fraction_missing>0. fraction_missing is a
     # constant input -> no gradient / curvature is accumulated with respect to it.
-    leaf_fm_log = getattr(static, "leaf_fm_log", None)
+    leaf_fm_log = static.leaf_fm_log
     family_idx = static.rate_family_idx
     species_child1 = sh["sp_child1"]
     species_child2 = sh["sp_child2"]

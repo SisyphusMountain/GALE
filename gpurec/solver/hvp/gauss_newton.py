@@ -28,10 +28,10 @@ _LN2 = 0.6931471805599453
 
 
 @torch.no_grad()
-def vjp_root_to_theta(static, sv, seed_root, theta, receiver_weights, *, drop_norm=True,
-                      neumann_terms=None, use_pruning=None, e_adjoint_tol=None, cache=None,
-                      origination_log_probs=None, origination_probs=None,
-                      reserved_scratch_bytes=None, warm_v=None, leaf_fm_log=None):
+def vjp_root_to_theta(static, sv, seed_root, theta, receiver_weights, *, drop_norm,
+                      neumann_terms, use_pruning, e_adjoint_tol, cache,
+                      origination_log_probs, origination_probs,
+                      reserved_scratch_bytes, warm_v, leaf_fm_log):
     """J^T applied to a root-score cotangent ``seed_root`` [n_root, S] -> ``(grad_theta [S,3], grad_col)``.
 
     Thin wrapper over the production ``implicit_grad_loglik_vjp_wave``: it unpacks ``static``/``sv``
@@ -69,10 +69,11 @@ def vjp_root_to_theta(static, sv, seed_root, theta, receiver_weights, *, drop_no
         adjoint_pruning_threshold=so.adjoint_pruning_threshold,
         use_adjoint_pruning=bool(so.use_adjoint_pruning if use_pruning is None else use_pruning),
         pibar_side_threshold=so.pibar_side_threshold,
+        collect_backward_relres=False,
         seed_root=seed_root, drop_norm=drop_norm, cache=cache,
         origination_log_probs=origination_log_probs, origination_probs=origination_probs,
         accumulator_dtype=resolve_accumulator_dtype(
-            getattr(static, "accumulator_dtype", None),
+            static.accumulator_dtype,
             fallback=sv["pi_wave"].dtype,
         ),
         reserved_scratch_bytes=reserved_scratch_bytes, warm_v=warm_v,
@@ -94,7 +95,7 @@ def make_ggn_hvp(static, theta, receiver_weights, sv, *, self_tol=None,
     root_ids = static.wave_layout["root_clade_ids"]
     root_Pi = sv["pi_wave"].index_select(0, root_ids)
     accumulator_dtype = resolve_accumulator_dtype(
-        getattr(static, "accumulator_dtype", None),
+        static.accumulator_dtype,
         fallback=root_Pi.dtype,
     )
     root_head = root_Pi.to(dtype=accumulator_dtype)
@@ -104,15 +105,17 @@ def make_ggn_hvp(static, theta, receiver_weights, sv, *, self_tol=None,
     def hvp(v_vec):
         v = v_vec.reshape(S, 3).to(theta.dtype)
         t = jvp_root_scores(static, theta, v, sv, self_tol=self_tol, self_max_iter=self_max_iter,
-                            leaf_fm_log=getattr(static, "leaf_fm_log", None))
+                            leaf_fm_log=static.leaf_fm_log)
         t_head = t.to(dtype=accumulator_dtype)
         u = _LN2 * q * (
             t_head - (q * t_head).sum(dim=-1, keepdim=True)
         )  # B t  (PSD Fisher covariance)
         gt, _gc = vjp_root_to_theta(static, sv, u, theta, receiver_weights, drop_norm=True,
                                     neumann_terms=vjp_neumann_terms, use_pruning=vjp_use_pruning,
-                                    e_adjoint_tol=vjp_e_adjoint_tol,
-                                    leaf_fm_log=getattr(static, "leaf_fm_log", None))
+                                    e_adjoint_tol=vjp_e_adjoint_tol, cache=None,
+                                    origination_log_probs=None, origination_probs=None,
+                                    reserved_scratch_bytes=None, warm_v=None,
+                                    leaf_fm_log=static.leaf_fm_log)
         return gt.reshape(-1)
 
     return hvp

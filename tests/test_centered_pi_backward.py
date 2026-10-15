@@ -162,12 +162,22 @@ def _implicit_kwargs(model, solved, receiver_weights, origination_weights):
         family_idx=static.rate_family_idx,
         specieswise=static.specieswise,
         genewise=static.genewise,
+        leaf_fm_log=static.leaf_fm_log,
         neumann_terms=model.solver_options.neumann_terms,
+        e_adjoint_max_iter=model.solver_options.e_adjoint_max_iter,
+        e_adjoint_tol=model.solver_options.e_adjoint_tol,
         adjoint_pruning_threshold=model.solver_options.adjoint_pruning_threshold,
         use_adjoint_pruning=False,
         pibar_side_threshold=model.solver_options.pibar_side_threshold,
+        collect_backward_relres=False,
+        warm_v=None,
+        reserved_scratch_bytes=None,
+        seed_root=None,
+        drop_norm=False,
+        cache=None,
         origination_log_probs=origination_log_probs,
         origination_probs=origination_probs,
+        accumulator_dtype=None,
     )
 
 

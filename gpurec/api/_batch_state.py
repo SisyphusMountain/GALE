@@ -20,6 +20,9 @@ class _BatchStatic:
     solver_options: SolverOptions
     precision_options: PrecisionOptions
     accumulator_dtype: torch.dtype
+    # Per-species fraction-missing leaf boundary (log2(fraction_missing_s), -inf
+    # off-leaf/observed). Shared across batches; None => every gene observed.
+    leaf_fm_log: torch.Tensor | None
     pi_forward_state: PiState | None = None
     warm_E: torch.Tensor | None = None
     warm_v: dict | None = None   # per-wave backward Pi-adjoint warm-start cache (keyed by wave-start ws)
@@ -31,9 +34,6 @@ class _BatchStatic:
     # self-loop gate so it trusts the build reservation instead of re-reading the depleted post-cache
     # free memory. None -> cold path (gate reads current free memory as usual). See memory_policy.
     warm_scratch_reserved_bytes: int | None = None
-    # Per-species fraction-missing leaf boundary (log2(fraction_missing_s), -inf
-    # off-leaf/observed). Shared across batches; None => every gene observed.
-    leaf_fm_log: torch.Tensor | None = None
 
 
 def build_batch_static(
@@ -49,7 +49,7 @@ def build_batch_static(
     accumulator_dtype: torch.dtype,
     device: torch.device,
     max_wave_size: int,
-    leaf_fm_log: torch.Tensor | None = None,
+    leaf_fm_log: torch.Tensor | None,
 ) -> _BatchStatic:
     batch_families = [families[index] for index in batch]
     wave_layout = (

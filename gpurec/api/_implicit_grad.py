@@ -2,7 +2,6 @@ import warnings
 
 import torch
 
-from gpurec.api.solver_options import SolverOptions
 from gpurec.config import dtype_rel_tol_default as _e_adjoint_rel_tol_default, dtype_rel_tol_floor as _e_adjoint_rel_tol_floor
 from gpurec.core.inference.logspace import logsumexp2 as _logsumexp2, log2_survival as _log2_survival
 from gpurec.core.kernels.pi_forward import _select_log_split_probs, compute_dts_forward
@@ -79,7 +78,7 @@ def _likelihood_log2_survival(
 
 
 @torch.no_grad()
-def _neumann_e_adjoint(Av, b: torch.Tensor, *, max_iter: int = 128, tol=None):
+def _neumann_e_adjoint(Av, b: torch.Tensor, *, max_iter: int, tol):
     """Solve ``(I - J) x = b`` by Neumann series ``x = sum_k J^k b``, where ``J w = w - Av(w)``.
 
     The E-adjoint / GGN linear solve. No orthogonalization -> no fp32 Arnoldi-style residual
@@ -160,41 +159,33 @@ def implicit_grad_loglik_vjp_wave(
     use_receiver_weights: bool,
     theta: torch.Tensor, receiver_weights: torch.Tensor, uniform_pibar_row_max: torch.Tensor,
     family_idx: torch.Tensor,
-    leaf_fm_log: torch.Tensor | None = None,
-    specieswise: bool = False,
-    genewise: bool = False,
-    neumann_terms: int | None = None,
-    e_adjoint_max_iter: int | None = None,
-    e_adjoint_tol=None,
-    adjoint_pruning_threshold: float | None = None,
-    use_adjoint_pruning: bool = True,
-    pibar_side_threshold: float | None = None,
-    collect_backward_relres: bool = False,
-    warm_v: dict | None = None,
-    reserved_scratch_bytes: int | None = None,
-    seed_root: torch.Tensor | None = None,
-    drop_norm: bool = False,
-    cache: dict | None = None,
-    origination_log_probs: torch.Tensor | None = None,
-    origination_probs: torch.Tensor | None = None,
-    accumulator_dtype: torch.dtype | None = None,
+    leaf_fm_log: torch.Tensor | None,
+    specieswise: bool,
+    genewise: bool,
+    neumann_terms: int,
+    e_adjoint_max_iter: int,
+    e_adjoint_tol,
+    adjoint_pruning_threshold: float,
+    use_adjoint_pruning: bool,
+    pibar_side_threshold: float,
+    collect_backward_relres: bool,
+    warm_v: dict | None,
+    reserved_scratch_bytes: int | None,
+    seed_root: torch.Tensor | None,
+    drop_norm: bool,
+    cache: dict | None,
+    origination_log_probs: torch.Tensor | None,
+    origination_probs: torch.Tensor | None,
+    accumulator_dtype: torch.dtype | None,
     pi_offset: torch.Tensor,
     pibar_offset: torch.Tensor,
 ):
-    if neumann_terms is None:
-        neumann_terms = SolverOptions().neumann_terms
     neumann_terms = int(neumann_terms)
     if neumann_terms < 0:
         raise ValueError("neumann_terms must be non-negative")
-    if e_adjoint_max_iter is None:
-        e_adjoint_max_iter = SolverOptions().e_adjoint_max_iter
-    if adjoint_pruning_threshold is None:
-        adjoint_pruning_threshold = SolverOptions().adjoint_pruning_threshold
     adjoint_pruning_threshold = float(adjoint_pruning_threshold)
     if adjoint_pruning_threshold < 0.0:
         raise ValueError("adjoint_pruning_threshold must be non-negative")
-    if pibar_side_threshold is None:
-        pibar_side_threshold = SolverOptions().pibar_side_threshold
     pibar_side_threshold = float(pibar_side_threshold)
     if pibar_side_threshold < 0.0:
         raise ValueError("pibar_side_threshold must be non-negative")
@@ -552,16 +543,14 @@ def _e_adjoint_and_theta_vjp(
     grad_E, grad_Ebar, grad_E_s1, grad_E_s2,
     grad_log_pD, grad_log_pS, grad_max_transfer_mat, grad_receiver_log_probs,
     n_fam, theta, receiver_weights, species_helpers, *, specieswise, genewise,
-    leaf_fm_log: torch.Tensor | None = None,
-    drop_norm: bool = False,
-    e_adjoint_max_iter: int | None = None,
-    e_adjoint_tol=None,
-    cache=None,
-    origination_probs=None,
-    accumulator_dtype: torch.dtype | None = None,
+    leaf_fm_log: torch.Tensor | None,
+    drop_norm: bool,
+    e_adjoint_max_iter: int,
+    e_adjoint_tol,
+    cache,
+    origination_probs,
+    accumulator_dtype: torch.dtype | None,
 ):
-    if e_adjoint_max_iter is None:
-        e_adjoint_max_iter = SolverOptions().e_adjoint_max_iter
     accumulator_dtype = resolve_accumulator_dtype(
         accumulator_dtype,
         fallback=E_star.dtype,
