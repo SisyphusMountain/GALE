@@ -177,7 +177,7 @@ def fit_genewise(
         with torch.no_grad():
             for static in m.batch_statics:
                 r = solve_forward_residual(static, m._theta_for_static(static, th), rw, pi_iters=pi)
-                out[static.family_index_tensor.to(dev)] = r.to(dev)
+                out[static.family_index_tensor.to(dev)] = r.to(device=dev, dtype=dtype)
         return out
 
     F_all = data.n_families
