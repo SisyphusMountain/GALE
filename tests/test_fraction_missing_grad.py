@@ -1,13 +1,14 @@
 import torch, pytest
 pytestmark = pytest.mark.gpu
 from gpurec.api.model import GeneReconModel
+from gpurec.config import GpurecConfig
 
 
 def _build(tmp_path, mode, fm):
     sp = tmp_path / "s.nwk"; sp.write_text("((A:1,B:1)AB:1,C:1)Root;")
     g = tmp_path / "g.nwk"; g.write_text("((A_1:1,B_1:1)x:1,C_1:1)GeneRoot;")
     return GeneReconModel(str(sp), [str(g)], mode=mode,
-                          dtype=torch.float64, fraction_missing=fm)
+                          dtype=torch.float64, fraction_missing=fm, clade_budget=GpurecConfig().batching.clade_budget)
 
 
 @pytest.mark.parametrize("mode", ["global", "specieswise"])

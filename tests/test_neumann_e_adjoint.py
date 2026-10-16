@@ -57,7 +57,7 @@ def test_neumann_matches_direct_solve():
         assert float(torch.linalg.cond(A.double())) < 2.0  # ~1.6, like the real operator
         b = A @ torch.randn(71, dtype=dtype, generator=torch.Generator().manual_seed(8))
 
-        x_neumann = _neumann_e_adjoint(_matvec(A), b)
+        x_neumann = _neumann_e_adjoint(_matvec(A), b, max_iter=128, tol=None)
         x_direct = torch.linalg.solve(A.double(), b.double())
 
         assert _rel_res(A, x_neumann, b) < bar
@@ -71,7 +71,7 @@ def test_neumann_matches_direct_solve():
 def test_fp32_default_residual():
     A = _e_adjoint_like(64, rho=0.3, dtype=torch.float32, seed=11)
     b = A @ torch.randn(64, dtype=torch.float32, generator=torch.Generator().manual_seed(1))
-    x = _neumann_e_adjoint(_matvec(A), b)
+    x = _neumann_e_adjoint(_matvec(A), b, max_iter=128, tol=None)
     assert _rel_res(A, x, b) <= dtype_rel_tol_default(torch.float32)
 
 
@@ -79,7 +79,7 @@ def test_fp64_reaches_tight_residual():
     A = _e_adjoint_like(48, rho=0.2, dtype=torch.float64, seed=12)
     xtrue = torch.randn(48, dtype=torch.float64, generator=torch.Generator().manual_seed(2))
     b = A @ xtrue
-    x = _neumann_e_adjoint(_matvec(A), b, tol=1e-12)
+    x = _neumann_e_adjoint(_matvec(A), b, tol=1e-12, max_iter=128)
     assert _rel_res(A, x, b) <= 1e-10
     assert float(torch.linalg.vector_norm(x - xtrue) / torch.linalg.vector_norm(xtrue)) < 1e-8
 
@@ -89,7 +89,7 @@ def test_subfloor_tol_warns_and_clamps():
     b = A @ torch.randn(48, dtype=torch.float32, generator=torch.Generator().manual_seed(3))
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        x = _neumann_e_adjoint(_matvec(A), b, tol=1e-12)  # unreachable in fp32
+        x = _neumann_e_adjoint(_matvec(A), b, tol=1e-12, max_iter=128)  # unreachable in fp32
     assert any("below the" in str(wi.message) for wi in w)
     assert _rel_res(A, x, b) < 5e-6
 
@@ -99,14 +99,14 @@ def test_none_tol_uses_dtype_default_no_warning():
     b = A @ torch.randn(48, dtype=torch.float32, generator=torch.Generator().manual_seed(5))
     with warnings.catch_warnings():
         warnings.simplefilter("error")  # any warning fails the test
-        x = _neumann_e_adjoint(_matvec(A), b, tol=None)
+        x = _neumann_e_adjoint(_matvec(A), b, tol=None, max_iter=128)
     assert _rel_res(A, x, b) <= dtype_rel_tol_default(torch.float32)
 
 
 def test_zero_rhs_returns_zero():
     A = _e_adjoint_like(16, rho=0.1, dtype=torch.float64, seed=15)
     b = torch.zeros(16, dtype=torch.float64)
-    x = _neumann_e_adjoint(_matvec(A), b)
+    x = _neumann_e_adjoint(_matvec(A), b, max_iter=128, tol=None)
     assert float(torch.linalg.vector_norm(x)) == 0.0
 
 
@@ -115,4 +115,4 @@ def test_non_contraction_raises():
     A = _e_adjoint_like(32, rho=1.5, dtype=torch.float64, seed=16)
     b = A @ torch.randn(32, dtype=torch.float64, generator=torch.Generator().manual_seed(6))
     with pytest.raises(RuntimeError):
-        _neumann_e_adjoint(_matvec(A), b, max_iter=64)
+        _neumann_e_adjoint(_matvec(A), b, max_iter=64, tol=None)

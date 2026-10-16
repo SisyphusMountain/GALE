@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from gpurec.io.alerax_readers import parse_alerax_likelihoods, parse_alerax_parameters, global_rates
+from tests.support.alerax_readers import parse_alerax_likelihoods, parse_alerax_parameters, global_rates
 from tests.support.fidelity import reconcile_at_alerax_rates, compare
 
 DATA = Path(__file__).parent / "data" / "alerax"

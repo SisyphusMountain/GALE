@@ -29,11 +29,9 @@ match gpurec; that reasoning was backwards, and it manufactured a large,
 reproducible discrepancy in the sampled origination distribution on any
 fixture where duplication and transfer both compete for the same clade (e.g.
 species "A" drawn ~14% of the time by gpurec vs ~28% by AleRax on the fixture
-below) -- a genuinely different quantity being compared, not a model bug. Full
-writeup, including the two other hypotheses tested and refuted along the way
-(transfer-admissibility rule, uniform-receiver normalization, fixed-point
-convergence -- all confirmed to match), is in
-docs/gpurax/alerax_transfer_origination_discrepancy.md.
+below) -- a genuinely different quantity being compared, not a model bug. The
+other explanations tested along the way (transfer-admissibility rule,
+uniform-receiver normalization, fixed-point convergence) all matched AleRax.
 
 Receiver weights have no AleRax equivalent at all (AleRax's transfer receiver
 is always uniform), so that piece can only be checked internally -- see
@@ -48,6 +46,7 @@ import subprocess
 import numpy as np
 import pytest
 from scipy import stats
+from gpurec.config import GpurecConfig
 
 pytestmark = pytest.mark.gpu
 
@@ -124,7 +123,7 @@ def _run_gpurec_origination(sp_path, g_path, fraction_missing):
 
     model = GeneReconModel(
         str(sp_path), [str(g_path)], mode="global", dtype=torch.float64,
-        fraction_missing=fraction_missing,
+        fraction_missing=fraction_missing, clade_budget=GpurecConfig().batching.clade_budget
     )
     with torch.no_grad():
         model.theta.copy_(

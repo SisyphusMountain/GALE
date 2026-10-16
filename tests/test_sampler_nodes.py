@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from gpurec.config import GpurecConfig
 
 pytestmark = pytest.mark.gpu
 FIXTURE = Path(__file__).parent / "data" / "alerax" / "test_trees_1"
@@ -18,7 +19,7 @@ def test_nodes_carry_clades_and_many_matches_single():
         sample_reconciliations,
     )
 
-    model = GeneReconModel(str(FIXTURE / "sp.nwk"), [str(FIXTURE / "g.nwk")], mode="global")
+    model = GeneReconModel(str(FIXTURE / "sp.nwk"), [str(FIXTURE / "g.nwk")], mode="global", clade_budget=GpurecConfig().batching.clade_budget)
     with torch.no_grad():
         model.theta.copy_(torch.log2(torch.tensor([0.1, 0.1, 0.1], device=model.theta.device)))
     static = model.batch_statics[0]

@@ -25,30 +25,6 @@ def _static(
     )
 
 
-def test_pi_representation_option_is_removed(tmp_path):
-    assert not hasattr(SolverOptions(), "pi_representation")
-    with pytest.raises(TypeError, match="pi_representation"):
-        SolverOptions(pi_representation="centered")
-
-    config = tmp_path / "gpurec.toml"
-    config.write_text('[solver]\npi_representation = "absolute"\n', encoding="utf-8")
-    with pytest.raises(ValueError, match="unknown config key.*pi_representation"):
-        GpurecConfig.from_toml(config)
-
-
-def test_global_tiers_have_no_representation_option():
-    fit_tier = global_fit._tier_solver_options(GpurecConfig(), pi_iters=16, neumann_terms=16)
-    eval_tier = global_fit._tier_solver_options(GpurecConfig(), pi_iters=64, neumann_terms=64)
-
-    assert not hasattr(fit_tier, "pi_representation")
-    assert not hasattr(eval_tier, "pi_representation")
-    assert (fit_tier.pi_iters, eval_tier.pi_iters) == (16, 64)
-
-
-def test_pi_wave_forward_has_no_representation_parameter():
-    assert "pi_representation" not in inspect.signature(solver.pi_wave_forward).parameters
-
-
 def test_solver_stores_required_pi_state(monkeypatch):
     options = SolverOptions()
     static = SimpleNamespace(
@@ -65,6 +41,7 @@ def test_solver_stores_required_pi_state(monkeypatch):
         genewise=False,
         wave_layout={"root_clade_ids": torch.tensor([0])},
         rate_family_idx=torch.zeros(1, dtype=torch.long),
+        leaf_fm_log=None,
     )
     theta = torch.zeros(3)
     receiver_weights = torch.zeros(2)

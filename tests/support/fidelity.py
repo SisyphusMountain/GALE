@@ -26,7 +26,7 @@ def _pearson(xs, ys):
 
 
 def compare(gpurec_ll: dict, alerax_ll: dict) -> FidelityReport:
-    from gpurec.io.alerax_readers import norm_family_name
+    from tests.support.alerax_readers import norm_family_name
     g = {norm_family_name(k): v for k, v in gpurec_ll.items()}
     a = {norm_family_name(k): v for k, v in alerax_ll.items()}
     keys = sorted(set(g) & set(a))
@@ -46,7 +46,7 @@ def reconcile_at_alerax_rates(species, genes, rates, *, device="cuda", dtype=Non
     """rates: AleraxRates/(D, L, T) in AleRax order. Returns {family: logL_nats}."""
     import torch
     from gpurec.api.model import GeneReconModel
-    from gpurec.io.alerax_readers import norm_family_name
+    from tests.support.alerax_readers import norm_family_name
 
     D, L, T = float(rates[0]), float(rates[1]), float(rates[2])
     gene_list = genes if isinstance(genes, list) else [genes]

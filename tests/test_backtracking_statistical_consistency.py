@@ -44,6 +44,7 @@ from gpurec.core.backtracking.input import (
     _species_param,
 )
 from gpurec.core.inference.solver import solve_resident_e_pi
+from gpurec.config import GpurecConfig
 
 _SPECIES = "(((A:1,B:1)AB:1,C:1)ABC:1,D:1)Root;"
 _GENE = "A_1;"  # single-leaf gene family: the whole trajectory stays in one clade.
@@ -59,7 +60,7 @@ def _build_model(tmp_path):
     g.write_text(_GENE)
     model = GeneReconModel(
         str(sp), [str(g)], mode="specieswise", dtype=torch.float64,
-        fraction_missing={"C": 0.85, "D": 0.9},
+        fraction_missing={"C": 0.85, "D": 0.9}, clade_budget=GpurecConfig().batching.clade_budget
     )
     S = int(model.species_helpers["S"])
     with torch.no_grad():

@@ -120,6 +120,7 @@ def test_weighted_exact_hvp_promotes_head_logits_before_small_softmax(monkeypatc
     )
     static = SimpleNamespace(
         accumulator_dtype=torch.float64,
+        leaf_fm_log=None,
         solver_options=SimpleNamespace(pi_iters=1),
         species_helpers={
             "S": 2,

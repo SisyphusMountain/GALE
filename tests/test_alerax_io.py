@@ -1,6 +1,6 @@
 import math
 import pytest
-from gpurec.io.alerax_readers import (
+from tests.support.alerax_readers import (
     parse_alerax_likelihoods, parse_alerax_parameters, norm_family_name,
     AleraxRates, global_rates,
 )

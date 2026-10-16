@@ -6,6 +6,7 @@ import pytest
 import torch
 
 from gpurec.data import load_families
+from gpurec.config import GpurecConfig
 
 RELEASE = Path(__file__).parent / "data" / "release"
 
@@ -109,7 +110,7 @@ def test_build_model_matches_model_built_from_files(monkeypatch):
     data = _load()
     config = GpurecConfig()
     built = data.build_model([0], "genewise", SolverOptions(), config, config.batching.clade_budget)
-    direct = GeneReconModel("species.nwk", ["fam1.nwk"], mode="genewise", config=config)
+    direct = GeneReconModel("species.nwk", ["fam1.nwk"], mode="genewise", config=config, clade_budget=GpurecConfig().batching.clade_budget)
     theta = torch.log2(torch.tensor([[0.1, 0.2, 0.05]], device="cuda", dtype=built.theta.dtype))
     a = float(built.genewise_loss_vector(theta=theta)[0])
     b = float(direct.genewise_loss_vector(theta=theta)[0])
@@ -145,7 +146,7 @@ def test_build_model_wires_fraction_missing_from_file(tmp_path, monkeypatch):
     built = data.build_model([0], "genewise", SolverOptions(), config, config.batching.clade_budget)
     direct = GeneReconModel(
         "species.nwk", ["fam1.nwk"], mode="genewise", config=config,
-        fraction_missing=data.fraction_missing,
+        fraction_missing=data.fraction_missing, clade_budget=GpurecConfig().batching.clade_budget
     )
     assert built.leaf_fm_log is not None and direct.leaf_fm_log is not None
     assert torch.equal(built.leaf_fm_log, direct.leaf_fm_log), (

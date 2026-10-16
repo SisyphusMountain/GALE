@@ -4,6 +4,7 @@ pytestmark = pytest.mark.gpu
 
 from gpurec.api.model import GeneReconModel
 from tests._fraction_missing_oracle import oracle_nll
+from gpurec.config import GpurecConfig
 
 
 def test_wave_matches_cpu_oracle(tmp_path):
@@ -23,7 +24,7 @@ def test_wave_matches_cpu_oracle(tmp_path):
         [str(g)],
         mode="global",
         dtype=torch.float64,
-        fraction_missing=fm,
+        fraction_missing=fm, clade_budget=GpurecConfig().batching.clade_budget
     )
     # This constructor has no theta_init_rates knob: set theta directly.
     # theta = log2([D, L, T]); the softmax over [1, D, L, T] recovers pS/pD/pL/pT.

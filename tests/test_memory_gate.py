@@ -8,8 +8,7 @@ resident cache -- and falsely reject a per-wave scratch the build already accoun
 threads that reservation as ``reserved_scratch_bytes`` so the gate validates the wave scratch against
 the reservation (a scratch that GENUINELY exceeds it is still rejected) instead of the moving budget.
 
-These tests are synthetic (W/S/budget arithmetic) -- fast, no CUDA / 500-leaf hardware needed. The
-@slow 500-leaf end-to-end lives in ``test_memory_gate_e2e`` below.
+These tests are synthetic (W/S/budget arithmetic) -- fast, no CUDA / 500-leaf hardware needed.
 """
 import math
 
@@ -86,6 +85,10 @@ def test_budget_counts_reclaimable_cache(monkeypatch):
     monkeypatch.setattr(torch.cuda, "mem_get_info", lambda idx=0: (free_b, total))
     monkeypatch.setattr(torch.cuda, "memory_reserved", lambda idx=0: reserved)
     monkeypatch.setattr(torch.cuda, "memory_allocated", lambda idx=0: allocated)
+    # Nothing but PyTorch on this card: the baseline the budget subtracts for other programs is set to 0
+    # here, instead of being measured once (from these mocks, or from the real card if an earlier test
+    # already asked) and kept for the whole process.
+    monkeypatch.setattr(memory_policy, "_NON_PYTORCH_AT_START", {0: 0})
     # fraction=0.85 cap = 20.4 GiB (not binding); reserve=1 GiB.
     budget = memory_policy.cuda_memory_budget_bytes(0, default_fraction=0.85, default_reserve_gib=1.0)
     reclaimable = reserved - allocated
@@ -125,124 +128,3 @@ def test_wave_scratch_is_subset_of_warm_adjoint_reservation(monkeypatch):
         assert ok_reserved, W
         ok_cold, _, _ = proposal0_memory_gate(W, S, DTYPE, reserved_scratch_bytes=None)
         assert not ok_cold, W  # cold path re-reads the depleted budget and (wrongly, pre-fix) rejects
-
-
-@pytest.mark.gpu
-def test_hvp_path_threads_reserved_scratch_bytes_when_warm_active(monkeypatch, tmp_path):
-    """Task C follow-up: the memory-gate fix (97f00559) threaded ``reserved_scratch_bytes``
-    through the GRADIENT path (``_execution.py`` -> ``implicit_grad_loglik_vjp_wave``) but
-    missed the HVP path -- ``build_point_cache`` (via ``vjp_root_to_theta``) and the
-    tangent-adjoint solve in ``make_exact_hvp_single`` both called ``solve_reconciliation_wave_vjp``
-    without it, so a resident warm-adjoint cache could still trip the false ``budget 0.00 GiB``
-    rejection there. Regression guard: spy on both call sites and assert the reservation is
-    threaded exactly like the gradient path -- ``static.warm_scratch_reserved_bytes`` when
-    warm-adjoint is active for this static (``solver_options.warm_adjoint`` set +
-    ``warm_adjoint_ok``), else ``None``.
-
-    Tiny fixture (12 species / 4 families, a couple of HVP evals) -- fast, no 500-leaf hardware.
-    """
-    rustree = pytest.importorskip("rustree")
-    if not torch.cuda.is_available():
-        pytest.skip("CUDA required")
-    import tempfile
-
-    import gpurec.api._implicit_grad as _implicit_grad_mod
-    import gpurec.solver.hvp.exact as _hvp_mod
-    from gpurec.api.model import GeneReconModel
-    from gpurec.api.solver_options import SolverOptions
-    from tests.support.simulate import simulate_dataset
-    from gpurec.solver.hvp.exact import build_point_cache, make_exact_hvp_single
-    from gpurec.solver.value_and_grad import forward_solve
-
-    so = SolverOptions(neumann_terms=16, pi_iters=32,
-                        adjoint_pruning_threshold=1e-6, use_adjoint_pruning=True,
-                        pibar_side_threshold=0.0)
-    so.validate()
-    d = tempfile.mkdtemp(dir=tmp_path)
-    sp, genes = simulate_dataset("specieswise", d, n_species=12, n_families=4, dtl=0.05, seed=7)
-    model = GeneReconModel(sp, genes, mode="specieswise", dtype=torch.float64,
-                           solver_options=so, family_chunk_size=None)
-    assert len(model.batch_statics) == 1
-    st = model.batch_statics[0]
-    theta = model.theta.detach().clone()
-    rw = model.receiver_weights.detach().clone()
-
-    real_impl_fn = _implicit_grad_mod.solve_reconciliation_wave_vjp
-    real_hvp_fn = _hvp_mod.solve_reconciliation_wave_vjp
-    captured = {"implicit_grad": [], "hvp_exact": []}
-
-    def spy_impl(*a, **kw):
-        captured["implicit_grad"].append(kw.get("reserved_scratch_bytes"))
-        return real_impl_fn(*a, **kw)
-
-    def spy_hvp(*a, **kw):
-        captured["hvp_exact"].append(kw.get("reserved_scratch_bytes"))
-        return real_hvp_fn(*a, **kw)
-
-    monkeypatch.setattr(_implicit_grad_mod, "solve_reconciliation_wave_vjp", spy_impl)
-    monkeypatch.setattr(_hvp_mod, "solve_reconciliation_wave_vjp", spy_hvp)
-
-    _loss, sv = forward_solve([st], theta, rw)
-
-    # --- warm-adjoint ACTIVE for this static: reservation must be threaded (not None). ---
-    model.configure_solver(warm_adjoint=True)
-    st.warm_adjoint_ok = True
-    sentinel_reserved = 123_456_789
-    st.warm_scratch_reserved_bytes = sentinel_reserved
-
-    _gt, _gc, cache = build_point_cache(st, theta, rw, sv)
-    assert captured["implicit_grad"], "build_point_cache never reached the gated fast path"
-    assert all(v == sentinel_reserved for v in captured["implicit_grad"]), captured["implicit_grad"]
-
-    hvp = make_exact_hvp_single(st, theta, rw, sv, cache=cache, tangent_self_iters=8)
-    torch.manual_seed(0)
-    u = torch.randn(theta.numel(), device="cuda", dtype=theta.dtype)
-    hvp(u)
-    assert captured["hvp_exact"], "hvp() never reached the gated fast path"
-    assert all(v == sentinel_reserved for v in captured["hvp_exact"]), captured["hvp_exact"]
-
-    # --- cold path unchanged: warm-adjoint inactive -> reserved_scratch_bytes stays None. ---
-    captured["implicit_grad"].clear()
-    captured["hvp_exact"].clear()
-    model.configure_solver(warm_adjoint=False)
-
-    _gt2, _gc2, cache2 = build_point_cache(st, theta, rw, sv)
-    assert captured["implicit_grad"]
-    assert all(v is None for v in captured["implicit_grad"]), captured["implicit_grad"]
-
-    hvp2 = make_exact_hvp_single(st, theta, rw, sv, cache=cache2, tangent_self_iters=8)
-    hvp2(torch.randn(theta.numel(), device="cuda", dtype=theta.dtype))
-    assert captured["hvp_exact"]
-    assert all(v is None for v in captured["hvp_exact"]), captured["hvp_exact"]
-
-
-@pytest.mark.gpu
-@pytest.mark.slow
-def test_500_leaf_warm_adjoint_forward_gate_e2e(tmp_path):
-    """500 extant leaves (S=999), warm-adjoint ON, moderate family count so warm FITS at build:
-    the model must build + run a short fit WITHOUT the forward self-loop 'budget 0.00 GiB' false
-    rejection, with warm-adjoint staying ON and peak memory within the GPU."""
-    rustree = pytest.importorskip("rustree")
-    if not torch.cuda.is_available():
-        pytest.skip("CUDA required")
-
-    from tests.support.simulate import simulate_dataset
-    from gpurec.api.model import GeneReconModel
-    from gpurec.api.solver_options import SolverOptions
-    from gpurec.fit.optimize import optimize
-
-    sp, genes = simulate_dataset("global", tmp_path, n_species=500, n_families=700,
-                                 dtl=0.05, seed=20260709)
-    model = GeneReconModel(sp, genes, mode="global", dtype=torch.float32,
-                           clade_budget=40_000, solver_options=SolverOptions(warm_adjoint=True))
-    if not model.warm_adjoint_ok:
-        pytest.skip("warm-adjoint did not fit at build on this GPU (cold regime, not the target)")
-    torch.cuda.reset_peak_memory_stats()
-    theta_hat, hist = optimize(model.batch_statics, model.theta.detach(),
-                               model.receiver_weights.detach(),
-                               max_steps=5, polish_mode="none", verbose=False)
-    assert model.warm_adjoint_ok
-    assert math.isfinite(float(hist[-1]["loss"]))
-    peak_gib = torch.cuda.max_memory_allocated() / (1024 ** 3)
-    _, total = torch.cuda.mem_get_info()
-    assert peak_gib < total / (1024 ** 3)

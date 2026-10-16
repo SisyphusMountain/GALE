@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from gpurec.config import GpurecConfig
 
 pytestmark = pytest.mark.gpu
 RELEASE = Path(__file__).parent / "data" / "release"
@@ -36,7 +37,7 @@ def test_evaluate_matches_the_pytorch_model(data):
 
     config = load_fit_config(None)
     result = evaluate(data, parametrization="global", rates=(0.1, 0.2, 0.05), config=config)
-    model = GeneReconModel("species.nwk", ["fam1.nwk"], mode="genewise", config=config)
+    model = GeneReconModel("species.nwk", ["fam1.nwk"], mode="genewise", config=config, clade_budget=GpurecConfig().batching.clade_budget)
     theta = torch.log2(torch.tensor([[0.1, 0.2, 0.05]], device="cuda", dtype=model.theta.dtype))
     expected = -float(model.genewise_loss_vector(theta=theta)[0]) * math.log(2.0)
     assert result.log_likelihoods["fam1"] == pytest.approx(expected, rel=1e-6)
@@ -127,7 +128,7 @@ def test_fit_over_several_batches_matches_one_batch_evaluation(tmp_path, monkeyp
 
     with monkeypatch.context() as patch:
         # Each family has 27 to 39 clades; a budget of 80 clades per batch gives several batches.
-        config.batching.clade_budget = 80
+        patch.setattr(config.batching, "clade_budget", 80)  # restored when the block ends
         patch.setattr(FamilyData, "build_model", recording_build_model)
         fitted = fit(data, parametrization=parametrization, start_rates=(0.1, 0.1, 0.1), config=config)
         assert len(fitted.model.batch_statics) > 1

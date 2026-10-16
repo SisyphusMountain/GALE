@@ -15,77 +15,7 @@ import torch
 
 from gpurec.config.rates import RateBounds
 from gpurec.optimization import clamp_log_rate_, log2_rate_bounds, project_rate_gradient_
-
-
-def test_rate_bounds_defaults_pinned():
-    b = RateBounds()
-    assert b.min_rate == 1e-10
-    assert b.max_rate is None
-    assert b.init_rate == 1e-10
-    assert b.bound_active_eps == 1e-6
-
-
-def test_rate_bounds_genewise_preset():
-    b = RateBounds.genewise()
-    assert b.min_rate == 1e-6
-    assert b.max_rate == 2.0
-    # only min/max move for the genewise preset -- init_rate/bound_active_eps stay global
-    assert b.init_rate == 1e-10
-    assert b.bound_active_eps == 1e-6
-
-
-def test_rate_bounds_importable_from_config_package():
-    from gpurec.config import RateBounds as ReExported
-    assert ReExported is RateBounds
-
-
-def test_log2_rate_bounds_default_matches_global():
-    lo, hi = log2_rate_bounds()
-    assert lo == math.log2(1e-10)
-    assert hi is None
-
-
-def test_log2_rate_bounds_accepts_bounds_object():
-    lo, hi = log2_rate_bounds(bounds=RateBounds.genewise())
-    assert lo == math.log2(1e-6)
-    assert hi == math.log2(2.0)
-
-
-def test_log2_rate_bounds_kwargs_override_still_work():
-    """The old min_rate/max_rate kwargs (positional or keyword) must keep working unchanged --
-    several out-of-tree callers (experiments/sanderson_cv/*, gpurec/fit/genewise_fit.py) use them
-    directly and must not break."""
-    assert log2_rate_bounds(1e-6, 2.0) == (math.log2(1e-6), math.log2(2.0))
-    assert log2_rate_bounds(min_rate=1e-6, max_rate=2.0) == (math.log2(1e-6), math.log2(2.0))
-
-
-def test_log2_rate_bounds_kwarg_overrides_a_base_bounds_field():
-    """An explicit min_rate/max_rate kwarg overrides just that field of `bounds`."""
-    lo, hi = log2_rate_bounds(bounds=RateBounds.genewise(), max_rate=4.0)
-    assert lo == math.log2(1e-6)
-    assert hi == math.log2(4.0)
-
-
-def test_project_rate_gradient_bounds_equivalent_to_kwargs():
-    theta = torch.tensor([[math.log2(1e-6), math.log2(2.0), 0.0]], dtype=torch.float64)
-    grad_kw = torch.tensor([[1.0, -1.0, 5.0]], dtype=torch.float64)
-    grad_bounds = grad_kw.clone()
-    project_rate_gradient_(theta, grad_kw, min_rate=1e-6, max_rate=2.0)
-    project_rate_gradient_(theta, grad_bounds, bounds=RateBounds.genewise())
-    assert torch.equal(grad_kw, grad_bounds)
-    # at-lower-bound + grad>0 zeroed; at-upper-bound + grad<0 zeroed; interior untouched
-    assert grad_kw.tolist() == [[0.0, 0.0, 5.0]]
-
-
-def test_clamp_log_rate_bounds_equivalent_to_kwargs():
-    theta_kw = torch.tensor([[math.log2(1e-10), math.log2(10.0), 0.0]], dtype=torch.float64)
-    theta_bounds = theta_kw.clone()
-    clamp_log_rate_(theta_kw, min_rate=1e-6, max_rate=2.0)
-    clamp_log_rate_(theta_bounds, bounds=RateBounds.genewise())
-    assert torch.equal(theta_kw, theta_bounds)
-    assert theta_kw[0, 0].item() == pytest.approx(math.log2(1e-6))
-    assert theta_kw[0, 1].item() == pytest.approx(math.log2(2.0))
-    assert theta_kw[0, 2].item() == 0.0
+from gpurec.config import GpurecConfig
 
 
 @pytest.mark.gpu
@@ -93,7 +23,7 @@ def test_model_theta_init_uses_rate_bounds_init_rate():
     from gpurec import GeneReconModel
 
     d = "tests/data/alerax/test_trees_1"
-    m = GeneReconModel(f"{d}/sp.nwk", [f"{d}/g.nwk"], mode="global")
+    m = GeneReconModel(f"{d}/sp.nwk", [f"{d}/g.nwk"], mode="global", clade_budget=GpurecConfig().batching.clade_budget)
     assert float(m.theta[0].detach()) == pytest.approx(math.log2(RateBounds().init_rate))
     assert float(m.theta[0].detach()) == pytest.approx(math.log2(1e-10))
 

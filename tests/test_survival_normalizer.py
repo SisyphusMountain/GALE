@@ -124,6 +124,7 @@ def test_ggn_fisher_head_uses_configured_accumulator(
         species_helpers={"S": 3},
         wave_layout={"root_clade_ids": torch.tensor([0])},
         accumulator_dtype=accumulator_dtype,
+        leaf_fm_log=None,
     )
     saved = {"pi_wave": root}
     captured = {}

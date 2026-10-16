@@ -61,6 +61,7 @@ import shutil
 import subprocess
 
 import pytest
+from gpurec.config import GpurecConfig
 
 pytestmark = pytest.mark.gpu
 
@@ -94,7 +95,7 @@ def _run_alerax(workdir, fm_filename, out_name):
     below the default ``--min-covered-species 4``, so we pass 3 or AleRax discards
     the family.
     """
-    from gpurec.io.alerax_readers import parse_alerax_likelihoods
+    from tests.support.alerax_readers import parse_alerax_likelihoods
 
     cmd = [
         _ALERAX,
@@ -138,7 +139,7 @@ def _run_gpurec_nats(sp_path, g_path, fraction_missing):
         [str(g_path)],
         mode="global",
         dtype=torch.float64,
-        fraction_missing=fraction_missing,
+        fraction_missing=fraction_missing, clade_budget=GpurecConfig().batching.clade_budget
     )
     with torch.no_grad():
         m.theta.copy_(
