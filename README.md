@@ -18,13 +18,8 @@ Requirements:
 - A Rust toolchain, installed with [rustup](https://rustup.rs/) (building
   `gpurec` compiles two small Rust extension modules).
 
-Install the latest tagged release directly from GitHub:
-
-```bash
-pip install git+https://github.com/SisyphusMountain/GALE@v0.1.0
-```
-
-or, from a clone:
+Build it from a clone (`pip install .` compiles the two Rust extensions and makes the package
+importable):
 
 ```bash
 git clone https://github.com/SisyphusMountain/GALE
