@@ -21,14 +21,14 @@ Requirements:
 Install the latest tagged release directly from GitHub:
 
 ```bash
-pip install git+https://github.com/SisyphusMountain/gpurec@v0.1.0
+pip install git+https://github.com/SisyphusMountain/GALE@v0.1.0
 ```
 
 or, from a clone:
 
 ```bash
-git clone https://github.com/SisyphusMountain/gpurec
-cd gpurec
+git clone https://github.com/SisyphusMountain/GALE
+cd GALE
 pip install .
 ```
 
