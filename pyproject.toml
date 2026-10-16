@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/SisyphusMountain/gpurec"
+Repository = "https://github.com/SisyphusMountain/GALE"
 
 [project.scripts]
 gpurec = "gpurec.cli.main:entry"

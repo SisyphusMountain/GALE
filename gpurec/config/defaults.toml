@@ -26,8 +26,7 @@ e_adjoint_max_iter = 128
 adjoint_pruning_threshold = 1e-6
 use_adjoint_pruning = true
 # Off: with the clade limit below, the exact Hessian would keep one warm-start array per batch and per
-# probe on the card and the run stopped for lack of memory on an RTX 4090 (24 GB). Measured; see
-# configs/fit_24gb_card.toml.
+# probe on the card and the run stopped for lack of memory on an RTX 4090 (24 GB). Measured.
 use_hvp_warm_start = false
 warm_adjoint = false
 pibar_side_threshold = 0.0
