@@ -182,28 +182,6 @@ class GpurecConfig:
         )
 
     @classmethod
-    def map_cv_reference(cls) -> "GpurecConfig":
-        """The ``map_cv`` CONVERGED solver config (pi_iters=64, neumann_terms=64; see ``_CV_SO`` in
-        ``research/map_cv.py``, research code that is not installed with gpurec), required for the
-        CV-fitted theta to be a true optimum. That ``_CV_SO`` is derived from this factory's ``.solver``.
-        """
-        return cls(
-            solver=SolverOptions(
-                e_max_iter=128, e_tol=1e-8, pi_iters=64, neumann_terms=64,
-                e_adjoint_max_iter=128, e_adjoint_tol=None,
-                adjoint_pruning_threshold=1e-6,
-                use_adjoint_pruning=True, pibar_side_threshold=0.0,
-            ),
-        )
-
-    @classmethod
-    def optimize_reference(cls) -> "GpurecConfig":
-        """``gpurec.fit.optimize.optimize`` has no separate solver recipe -- ``GeneReconModel`` falls
-        back to the default ``SolverOptions`` wherever ``optimize()`` is used, so the reference config
-        is exactly ``GpurecConfig()`` defaults."""
-        return cls()
-
-    @classmethod
     def from_toml(cls, path: str | Path) -> "GpurecConfig":
         """Load a (possibly partial) TOML file and deep-merge it onto ``GpurecConfig()``.
 

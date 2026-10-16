@@ -3,7 +3,7 @@
 ``fit_genewise`` is the standard way to fit independent per-family Duplication/Loss/Transfer rates to a
 converged, box-bounded maximum-likelihood optimum -- the same model AleRax fits with ``--rec-model
 UndatedDTL --model-parametrization PER-FAMILY``. The recipe (validated on the archaea / Hogenom genewise
-benchmarks; see ``kernel-bench/experiments/alerax_speed/OPTIMIZATION_PLAN.md``) is:
+benchmarks) is:
 
   1. **Adam warm-up** -- a few large clipped steps (lr=1, grad-clip-norm 10) projected against the rate
      box, to enter the basin fast.
@@ -53,7 +53,7 @@ _BASE_SOLVER = {
 
 # Reference recipe tuned for the standard genewise problem. Import and clone-override per dataset:
 #   fit_genewise(sp, genes, **{**GENEWISE_REFERENCE, "tol": 5e-4})
-# Per-dataset values belong in your experiment script, NOT edited here (see docs/config_convention.md).
+# Per-dataset values belong in your experiment script, NOT edited here.
 GENEWISE_REFERENCE = dict(
     adam_steps=5, adam_lr=1.0, grad_clip=10.0, pi_tiers=(16, 64), neu_opt=16, neu_cert=64,
     tol=1e-3, max_iter=120, check_every=4, drop_frac=0.30, trust=2.0,

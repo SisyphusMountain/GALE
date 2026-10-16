@@ -18,11 +18,6 @@ dependencies = [
     "scipy>=1.10",
 ]
 
-# Extra deps for the experiment drivers (not needed by the core library):
-#   experiments/receiver_robustness/archaea_exposure_cv.py -> ete3 (needs six)
-[project.optional-dependencies]
-experiments = ["ete3", "six"]
-
 [project.urls]
 Repository = "https://github.com/SisyphusMountain/gpurec"
 
@@ -41,5 +36,4 @@ testpaths = ["tests"]
 markers = [
     "gpu: requires CUDA + Triton (deselect with -m 'not gpu')",
     "slow: long-running test",
-    "regression: golden non-regression benchmark (rustree-simulated; skips if rustree/CUDA absent)",
 ]

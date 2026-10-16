@@ -1,10 +1,7 @@
 """Newton / Levenberg-Marquardt / Lanczos / CG controls for the curvature solvers.
 
-These fields were, before this module existed, copy-pasted as identical signature defaults across
-``gpurec/solver/curvature.py`` (the shared ``newton_min``/``certify_min`` core) and its three
-consumers ``genewise_curvature.py``, ``origination_curvature.py``, ``receiver_curvature.py``.
-``NewtonOptions`` is the single source of truth for those values; the four files now read from it
-(with the old individual kwargs kept as ``None``-sentinel overrides for backward compatibility).
+No fit or evaluation in gpurec 0.1 reads these settings: the ``[newton]`` section is refused when
+a fit is configured (``_INERT_FOR_FITTING`` in ``gpurec/config/gpurec_config.py``).
 """
 from __future__ import annotations
 
@@ -29,8 +26,7 @@ class NewtonOptions:
     seed: int = 0                  # Lanczos start-vector RNG seed
     fd_eps_blockwise: float = 1e-2 # FD step, genewise 3x3 Hessian -- RESERVED: validated here but
                                     # not yet read by fit/genewise_fit.py (FD literal is inline)
-    fd_eps_hvp: float = 1e-5       # FD step, full-HVP solvers -- RESERVED: validated here but not
-                                    # yet read by fit/newton_cg.py (FD literal is inline)
+    fd_eps_hvp: float = 1e-5       # FD step, full-HVP solvers -- RESERVED: validated here, read by no fit
     lam_ceil_factor: float = 10.0  # damping ceiling = factor * lam_max
     forcing_eta: float = 0.1       # inexact-Newton forcing-term cap
     certify_m: int = 200           # Lanczos steps for PD certificate

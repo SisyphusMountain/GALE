@@ -114,8 +114,7 @@ class OriginationPenalty:
 @dataclass
 class PenaltyOptions:
     """Facade grouping the existing regularizer config into one object: the origination
-    anti-collapse penalty, the TV-prior epsilon, and the ridge-homotopy defaults (CV lambda grid
-    in ``fit/map_cv.py``, margin/floor in ``fit/map_fit.py``). Purely additive -- constructing
+    anti-collapse penalty, the TV-prior epsilon, and the ridge-homotopy defaults. Purely additive -- constructing
     this does not change any existing penalty call site; ``OriginationPenalty``/``DEFAULT_TV_EPS``
     remain independently importable and unchanged.
     """
@@ -197,7 +196,7 @@ def origination_penalty_hvp(omega: torch.Tensor, cfg: OriginationPenalty, v: tor
     Every term in ``cfg`` (l2, depth, root, the three ``dirichlet`` barrier kinds, the floor mixture)
     is a SMOOTH function of omega -- unlike the pseudo-Huber TV prior in ``tv_prior_and_grad``, which
     has a non-smooth kink structure and is deliberately excluded from any Newton-curvature step
-    elsewhere in this codebase (see ``fit/optimize.py``'s ``tv_penalty`` guard). Because it is smooth,
+    elsewhere. Because it is smooth,
     its exact Hessian action is well-defined everywhere and cheap to get right by differentiating the
     already-verified gradient a second time, along ``v``, instead of hand-deriving one Hessian formula
     per barrier kind: build the value graph once (``create_graph=True``), take its gradient, then take

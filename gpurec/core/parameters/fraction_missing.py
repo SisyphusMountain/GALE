@@ -3,7 +3,7 @@
 
 ``fraction_missing_s = 1 - p_obs_s`` is the probability that a gene present in
 species ``s`` is unobserved at that leaf. It enters the E-step and Pi recurrence
-as a leaf boundary (see docs/superpowers/plans/2026-07-22-fraction-missing.md).
+as a leaf boundary.
 """
 from __future__ import annotations
 

@@ -63,7 +63,14 @@ First release. Based on the development state of 4 August 2026 (commit 27cdc472)
 
 ### Removed
 - The `gpurec fit` and `gpurec reconcile` subcommands and `fit_dtl` (replaced by the new interface).
-- Research code moved to `research/` (not installed): multi-GPU sharding, baselines, species-wise MAP cross-validation.
+- Research and development material is not part of the release: research code (multi-GPU sharding,
+  baselines, species-wise MAP cross-validation), experiments, notebooks, developer checks, cluster
+  benchmark scripts, and development plans and reports.
+- Package code that the command line, `fit` and `evaluate` never reach: the per-species fit
+  (`fit_specieswise`), the general optimiser (`gpurec.fit.optimize`), Newton-CG, the curvature and
+  Krylov solvers (`gpurec.solver.curvature`, `gpurec.solver.krylov`), `BatchedLBFGS`, and
+  `GpurecConfig.map_cv_reference` / `optimize_reference`; the AleRax output reader moved to the tests,
+  its only users. The optional dependency group `experiments` is gone.
 
 ### Fixed
 - `fit_global` crashed on a removed solver setting; `fit_genewise` crashed with an uncapped rate box.
@@ -71,8 +78,11 @@ First release. Based on the development state of 4 August 2026 (commit 27cdc472)
 - A missing or unreadable input file (for example a mistyped `-s` path), or `-p` naming an existing
   file, printed a Python traceback; the command line now prints a one-line error and exits with 1.
 - A malformed line in a mapping file now gives an error naming the file and the line number.
-- `fit_specieswise`'s error message and some documentation pointed to `gpurec.fit.map_cv`, which
-  moved to `research/map_cv.py` (not installed).
+- With a fraction-missing file, the gradient of every fit ignored the missing fractions while the
+  likelihood used them: fitted rates were wrong, and on some data sets the extinction-adjoint
+  series diverged ("E-adjoint Neumann series failed to converge").
+- A double-precision fit crashed when a family was rejected (a single-precision residual was
+  written into a double-precision table).
 
 ### Known issues
 - AleRax 1.4.0 itself aborts on a two-gene family while building its clade probabilities, before
@@ -84,6 +94,15 @@ First release. Based on the development state of 4 August 2026 (commit 27cdc472)
 
 ### Tests
 
+Second cleanup, for the release: tests that checked development details rather than results users
+rely on, or that could never run for a user, are removed: checks of the test data themselves, tests
+needing an external 3.4 GB capture or the `rustree` module (`tests/regression/`; its five
+memory-budget tests moved to `tests/test_memory_gate.py`), near-duplicates, tests pinning earlier
+refactors, and the tests of the removed package code. Tests left behind by the configuration
+changes now pass every argument explicitly, and the tests of warm starts switch them on themselves.
+The fraction-missing-zero curvature test compares to rounding instead of bit for bit (it failed
+about one run in three because the GPU may sum in a different order).
+
 Test suite cleanup done while fixing the crashes above and moving research-only code out of the
 installed package (`gpurec.fit`/`gpurec.bench`/CLI rewrites made a number of tests obsolete).
 
@@ -94,9 +113,8 @@ Whole files:
   unconditionally a Neumann series now).
 - Deleted `tests/test_cli.py` (10 tests) — tested the removed `gpurec fit`/`gpurec reconcile`
   subcommands.
-- Moved `tests/test_distributed_sharding.py` (5 tests) to `research/tests/test_distributed_sharding.py`
-  along with the multi-GPU sharding code it tests; `research/` is outside the installed package
-  and outside the automated test suite's `testpaths`.
+- Removed `tests/test_distributed_sharding.py` (5 tests) with the multi-GPU sharding code it tests,
+  which is not part of the release.
 - `tests/test_fit_recipes_run.py` (2 tests) was added early in this release (to pin down the
   `fit_global`/`fit_genewise` crash fixes) and removed again later in the same release, once
   `fit_global`/`fit_genewise`'s direct-file-path signature it tested was replaced by the
@@ -119,7 +137,7 @@ Individual tests removed from files that were otherwise kept:
   merge step it tested no longer exists but the config-supplies-the-floor behaviour still does).
   `test_map_cv_config_lambdas_threaded`, `test_map_cv_config_none_reproduces_today_defaults`,
   `test_map_cv_config_solver_field_threaded`, `test_map_cv_explicit_lambdas_wins_over_config` —
-  tested the removed `gpurec.fit.map_cv` (moved to `research/`).
+  tested the removed `gpurec.fit.map_cv` (not part of the release).
 - `tests/test_reference_defaults.py`: `test_map_cv_cv_so_matches_factory`,
   `test_map_cv_reference_matches_signature` — used the moved `map_cv` module directly.
 - `tests/test_centered_pi_option.py`: `test_fit_dtl_routes_solver_options_to_genewise_recipe` —
