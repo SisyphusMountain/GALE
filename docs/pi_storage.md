@@ -33,7 +33,7 @@ accumulator.
 | reconciliation backtracking | reconstructs only the selected family; the native sampler boundary converts to f64 because its host ABI requires f64 arrays |
 | JVP/tangent kernels | supported with native Pi/DTS frame corrections |
 | second-order wave/DTS contractions | supported with native frame corrections |
-| exact HVP and GGN | supported through the saved centered sidecar |
+| exact HVP | supported through the saved centered sidecar |
 
 An fp64/fp64 model uses the same canonical kernels and serves as the high-precision
 oracle in focused tests; production execution does not fall back to a second
