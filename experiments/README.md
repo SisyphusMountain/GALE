@@ -110,8 +110,8 @@ CLU_000445_30_3_C, and the callgrind profile of `released` counts the same calls
 Copy `paths.toml`, replace every value in capitals, and pass the copy's path as the first argument of every driver and
 figure script. There are no environment variables and no default values: every path is in this file. Every output
 goes under `[output] root` (written OUTPUT_ROOT below), one folder per driver: `hogenom`, `scaling`, `ablations`,
-`warm_rebatch`, `precision`, `fixed_rates`, `optima`, `archaea`, `measurements`, `profiles`, `planning`, plus
-`families` (the families files the drivers write from `data/families`).
+`warm_rebatch`, `precision`, `fixed_rates`, `optima`, `archaea`, `measurements`, `profiles`, `planning`, `cluster`,
+plus `families` (the families files the drivers write from `data/families`).
 
 A gpurec run named NAME writes, in its driver's folder: `NAME.time` (output of `/usr/bin/time -v`: wall time of the
 whole command, peak memory), `NAME.log` and `NAME.err` (gpurec's screen output; the time gpurec reports, "done in",
@@ -197,6 +197,7 @@ Times in the last column are those of the paper's runs (RTX 4090 and i9-13900K) 
 | Table `tab:precision` (and the factor 29 of double precision) | `python $E/run_precision.py $P table` | `precision/precision_test.log` | about 5 min |
 | All families at their fitted rates: `\pNFam`, `\pMax`, `\pMed`, `\pNAbove`, `\pTot`, `\pTimeSingle`, `\pTimeDouble`, `\pRatio`; Figure S1 of the supplement | `python $E/run_precision.py $P all-families` (after `run_hogenom.py gpurec-full`); `python $E/figures/make_fig_precision.py OUTPUT_ROOT/precision/precision_all.tsv fig_precision.pdf` | `precision/precision_all.log`, `precision_all.tsv` | about 15 min |
 | Double- against single-precision fits: `\fpFitMed`, `\fpRunMed`, `\fpFitN`, `\fpFitMax`, `\fpFitTotA`, `\fpFitTotB` | `python $E/run_precision.py $P double-fits` | `python $E/analysis/compare_fp64_fp32.py OUTPUT_ROOT/hogenom/out_full_1 OUTPUT_ROOT/hogenom/out_full_2 OUTPUT_ROOT/precision/out_double_half_1 OUTPUT_ROOT/precision/out_double_half_2` | not measured on the RTX 4090 (double precision is 29 to 53 times slower there); hours |
+| The same on a SLURM cluster, as the paper ran them (double precision on L40S cards, single precision on an H100) | `python $E/run_cluster.py $P double-half-1`, `... double-half-2` (at the same time, from two sessions), `... single-full-1`, `... single-full-2` | `python $E/analysis/compare_fp64_fp32.py OUTPUT_ROOT/cluster/out_single_full_1 OUTPUT_ROOT/cluster/out_single_full_2 OUTPUT_ROOT/cluster/out_double_half_1 OUTPUT_ROOT/cluster/out_double_half_2` (`analysis/agreement_tails.py` reads the local runs of `run_precision.py double-fits` and `run_hogenom.py gpurec-full`; for the cluster runs, copy or link them to those names) | in the paper: 1 h 49 min and 1 h 34 min for the halves (L40S), 25 and 18 min for the single-precision fits (H100) |
 
 ### Solver measurements and hardware
 
@@ -251,17 +252,18 @@ archaea).
 | `hogenom_1042.txt` | 1,042 | the families of the 1,055-family HOGENOM folder (sorted by name), keeping those that cover at least 4 species |
 | `hogenom_506.txt` | 506 | the first 506 of `hogenom_1042.txt` (the first 512 of the 1,055 names, then the same filter) |
 | `hogenom_200.txt` | 200 | the first 200 of `hogenom_1042.txt` |
-| `nested_N.txt` | 100 to 3,000 | random nested subsets: each is the beginning of the next one |
+| `nested_N.txt` | 100 to 3,000 | random nested subsets: `hogenom_all.txt` shuffled once (seed 20261014), each the beginning of the next one (`make_family_lists.py`) |
 | `random_batches/batch_NN.txt` | 500 (369) | 22 random batches that partition `hogenom_all.txt` (`make_family_lists.py`) |
 | `small_draws/nN_dDD.txt` | 1 to 30 | 20 independent random sets per size (`make_family_lists.py`) |
 | `opt200.txt` | 200 | the first 200 families of random batch 1 |
 | `profile_median_family.txt`, `profile_scaled_family.txt` | 1 each | the two families of the AleRax profiles |
 | `archaea_all.txt` | 7,059 | the archaeal families of the deposit's families file, in its order |
-| `archaea_200.txt` | 200 | archaeal families taken at random |
+| `archaea_200.txt` | 200 | archaeal families taken at random (seed 20261015) among the 6,724 that gpurec keeps, sorted by name (`make_family_lists.py`, after `run_archaea.py gpurec-fit`) |
 | `archaea_outliers16.txt` | 16 | the families of `archaea_200.txt` where gpurec and AleRax with the four changes differ by more than 0.001 nats |
 
-`python $E/make_family_lists.py $P` redraws the random batches and the small draws from the data and reports whether
-they equal the stored lists.
+`python $E/make_family_lists.py $P` redraws the random batches, the small draws, the nested subsets and (if the
+archaeal fit has been run) `archaea_200.txt`, and reports whether they equal the stored lists. On the paper's data it
+reports all 22 batches, all 80 small draws, the four nested subsets and `archaea_200.txt` equal to the stored lists.
 
 ## Differences from the paper's runs
 
@@ -291,10 +293,13 @@ they equal the stored lists.
   families) came from the earlier setting; `grad-check` here turns pruning truly off, so that number is to be measured
   again.
 - **The double-precision fits** ran on two NVIDIA L40S cards of a computing cluster, one half of the families each, and
-  were compared with two single-precision fits made on an NVIDIA H100 of the same cluster, with the code of d48c48f7.
-  Here the halves are the first 5,434 families of `hogenom_all.txt` and the other 5,435 (the paper's first half kept
-  5,434 families; that it was the first half of the list is a reconstruction), and the single-precision fits are
-  `full_1` and `full_2` of the RTX 4090.
+  were compared with two single-precision fits made on an NVIDIA H100 of the same cluster, with the code of d48c48f7
+  (plus, for double precision, the fix of commit bd16458d; both are in this branch). `run_cluster.py` runs the same
+  jobs (same srun options, kept in `[cluster]` of `paths.toml`); the paper's jobs were started by hand-written shell
+  scripts on the cluster, which held its paths. The halves are the first 5,434 families of `hogenom_all.txt` and the
+  other 5,435, the same families as the paper's halves (checked against the families of their outputs).
+  `run_precision.py double-fits` runs the same halves on the local card instead, and is compared with `full_1` and
+  `full_2` of the RTX 4090.
 - **AleRax builds.** The paper's AleRax runs used two copies of AleRax 1.4.0 that implement the same changes in two
   ways: changes 02 to 04 were first made with the number of passes in a global variable and an addition that stops
   bringing the smaller term into the bucket of the larger one after four factors of 2^-256 (beyond which the term
@@ -305,12 +310,10 @@ they equal the stored lists.
 
 ## Not reproduced or not verified
 
-- The script that drew the nested subsets (`nested_*.txt`) and the one that drew `archaea_200.txt` (seed 20261015)
-  were not kept; the lists themselves are in `data/families`.
 - The address of the 1,055-family HOGENOM archive (`hogenom.tar.gz`, folder with `hogenom_S.tree`, `hogenom_trees/`,
-  `hogenom_mappings/`) was not recorded.
-- The cluster scripts of the H100 and L40S runs (double-precision fits) are only reconstructed (`run_precision.py
-  double-fits`): the cluster folder was not available when these scripts were written.
+  `hogenom_mappings/`) was not recorded. What is known: the archive is 45,541,138 bytes (MD5 checksum
+  24bcc160951d5eb5160d38467c621255), its copy in the download folder of the paper's machine is dated 8 October 2025,
+  it has no file naming its source, and its 1,055 families are all among the 12,408 HOGENOM families of the AleRax data archive.
 - The paper's values for the five reference cases of the package were read from a run of them, not written to a file.
 - `measure/grad_check.py` now turns pruning off with the threshold 0 as well (see "Adjoint pruning off"); the
   gradient difference "pruning off" of 1.9e-7 in the comments of `numbers_gpu.tex` came from the earlier setting and has
