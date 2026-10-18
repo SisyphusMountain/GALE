@@ -1,7 +1,7 @@
 """Floating-point precision policy for model state and small accumulations.
 
 Configuration files store dtype names rather than :class:`torch.dtype` objects
-so precision settings round-trip through TOML and ``GpurecConfig.to_dict()``.
+so precision settings round-trip through TOML.
 The conversion to PyTorch dtypes happens once at construction boundaries.
 """
 from __future__ import annotations

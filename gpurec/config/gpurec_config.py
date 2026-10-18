@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tomllib
-from dataclasses import asdict, dataclass, field, fields, is_dataclass, replace
+from dataclasses import dataclass, field, fields, is_dataclass, replace
 from pathlib import Path
 
 import torch
@@ -109,8 +109,8 @@ def _merge_into(instance, overrides: dict, path: str):
             # TOML (and JSON) have no tuple type -- arrays always decode to
             # Python ``list``. Coerce back to ``tuple`` here so a field whose
             # dataclass default is a tuple (e.g. ``PenaltyOptions.lambdas``)
-            # round-trips through ``from_dict``/``from_toml`` as a tuple, not a
-            # list, and so equality against the dataclass default still holds.
+            # comes back from a TOML file as a tuple, not a list, and so
+            # equality against the dataclass default still holds.
             updates[key] = tuple(value)
         else:
             updates[key] = value
@@ -148,21 +148,6 @@ class GpurecConfig:
             if callable(validate_fn):
                 validate_fn()
 
-    def to_dict(self) -> dict:
-        """Nested ``dataclasses.asdict`` of every sub-option."""
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, d: dict) -> "GpurecConfig":
-        """Deep-merge a (possibly partial) dict onto ``GpurecConfig()`` defaults.
-
-        Any key -- top-level or nested -- that does not correspond to an
-        existing field raises ``ValueError`` rather than being ignored.
-        """
-        config = _merge_into(cls(), d, path="")
-        config.validate()
-        return config
-
     @classmethod
     def genewise_reference(cls) -> "GpurecConfig":
         """The ``fit_genewise`` recipe's solver + rate-bounds config (see ``gpurec/fit/genewise_fit.py``).
@@ -180,38 +165,6 @@ class GpurecConfig:
             ),
             rates=RateBounds.genewise(),
         )
-
-    @classmethod
-    def from_toml(cls, path: str | Path) -> "GpurecConfig":
-        """Load a (possibly partial) TOML file and deep-merge it onto ``GpurecConfig()``.
-
-        ``path`` is read in binary mode via :mod:`tomllib` (as required by that
-        module) and the resulting dict is passed through :meth:`from_dict`, so a
-        user TOML need only list the fields it wants to override -- and any
-        unknown key (top-level or nested) still raises ``ValueError`` rather
-        than being silently ignored.
-
-        ``gpurec/config/defaults.toml`` (see ``DEFAULTS_TOML_PATH``) is a
-        hand-written mirror of every field's dataclass default; the guard test
-        ``GpurecConfig.from_toml(DEFAULTS_TOML_PATH) == GpurecConfig()`` is the
-        permanent check that the two never drift apart.
-        """
-        with open(path, "rb") as fh:
-            d = tomllib.load(fh)
-        return cls.from_dict(d)
-
-
-def load_config(path: str | Path | None = None) -> GpurecConfig:
-    """Return the effective :class:`GpurecConfig`.
-
-    ``path is None`` (the default) returns ``GpurecConfig()`` directly -- the
-    hardcoded dataclass defaults, with no file IO. When ``path`` is given, it
-    is loaded as a TOML file via :meth:`GpurecConfig.from_toml`, deep-merged
-    onto the defaults so the file need only list overrides.
-    """
-    if path is None:
-        return GpurecConfig()
-    return GpurecConfig.from_toml(path)
 
 
 _INERT_FOR_FITTING = {"memory", "newton", "regularizer"}

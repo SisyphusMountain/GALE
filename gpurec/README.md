@@ -19,9 +19,8 @@ helpers, and Triton kernels.
   gene-wise `GeneReconModel`).
 - `write_alerax`: write a `FitResult` (and, optionally, its sampled
   reconciliations) to AleRax-format output files.
-- `load_fit_config`, `load_config`: read a `GpurecConfig` from an optional
-  TOML file (`load_fit_config` starts from the fitting-reference defaults;
-  `load_config` starts from the plain dataclass defaults).
+- `load_fit_config`: read a `GpurecConfig` from an optional TOML file,
+  starting from the fitting-reference defaults.
 - `GpurecConfig`: solver, precision and rate-box settings (it also holds
   memory, Newton and regularizer settings, which have no effect on fitting
   in 0.1; `load_fit_config` rejects them).
@@ -42,8 +41,8 @@ helpers, and Triton kernels.
 - `__init__.py`: defines the package-level import surface (above).
 - `interface.py`: `fit`, `evaluate`, `FitResult` — the top-level Python API.
 - `data.py`: `load_families`, `FamilyData`, AleRax-style family filtering.
-- `config/`: `GpurecConfig` and its TOML loaders (`load_config`,
-  `load_fit_config`); `config/defaults.toml` documents every field.
+- `config/`: `GpurecConfig` and its TOML loader (`load_fit_config`);
+  `config/defaults.toml` documents every field.
 - `cli/`: the `gpurec` command line (AleRax-compatible arguments).
 - `io/`: families-file, mapping-file and AleRax-output-file readers/writers
   (`write_alerax`).

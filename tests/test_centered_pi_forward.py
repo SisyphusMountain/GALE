@@ -7,6 +7,7 @@ import torch
 from gpurec import GeneReconModel, SolverOptions
 from gpurec.api._execution import stream_batches
 from gpurec.core.inference.forward import pi_wave_forward
+from gpurec.core.pi_state import PiState
 from gpurec.core.inference.solver import solve_forward_residual, solve_resident_e_pi
 from gpurec.core.kernels.pi_forward import (
     compute_dts_forward,
@@ -812,11 +813,14 @@ def test_pi_forward_matches_fp64_for_receiver_and_origination_cases(
     root64, pi64, pibar64, row_max64 = solved64[4:8]
     torch.testing.assert_close(root32, root64, rtol=0.0, atol=2e-5)
     torch.testing.assert_close(
-        state32.reconstruct_pi(pi32), state64.reconstruct_pi(pi64), rtol=0.0, atol=2e-5
+        PiState.reconstruct_rows(pi32, state32.pi_offset),
+        PiState.reconstruct_rows(pi64, state64.pi_offset),
+        rtol=0.0,
+        atol=2e-5,
     )
-    pi_absolute32 = state32.reconstruct_pi(pi32)
-    pibar_absolute32 = state32.reconstruct_pibar(pibar32)
-    pibar_absolute64 = state64.reconstruct_pibar(pibar64)
+    pi_absolute32 = PiState.reconstruct_rows(pi32, state32.pi_offset)
+    pibar_absolute32 = PiState.reconstruct_rows(pibar32, state32.pibar_offset)
+    pibar_absolute64 = PiState.reconstruct_rows(pibar64, state64.pibar_offset)
     finite32 = torch.isfinite(pibar_absolute32)
     finite64 = torch.isfinite(pibar_absolute64)
     # Pibar excludes the current species' ancestor path by subtracting its mass
@@ -840,8 +844,8 @@ def test_pi_forward_matches_fp64_for_receiver_and_origination_cases(
         .item()
     )
     torch.testing.assert_close(
-        state32.reconstruct_pibar_row_max(row_max32),
-        state64.reconstruct_pibar_row_max(row_max64),
+        row_max32.to(dtype=state32.pi_offset.dtype) + state32.pi_offset,
+        row_max64.to(dtype=state64.pi_offset.dtype) + state64.pi_offset,
         rtol=0.0,
         atol=2e-5,
     )

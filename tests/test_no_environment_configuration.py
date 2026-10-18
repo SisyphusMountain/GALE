@@ -24,7 +24,6 @@ def test_package_reads_no_environment_variables():
 
 
 def test_warm_adjoint_is_a_solver_setting():
-    from gpurec.config import GpurecConfig, load_config
+    from gpurec.config import GpurecConfig
 
     assert GpurecConfig().solver.warm_adjoint is False
-    assert load_config(None).solver.warm_adjoint is False

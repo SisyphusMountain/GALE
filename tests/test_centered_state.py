@@ -60,11 +60,7 @@ def test_complete_centered_state_validates_frames_on_cuda(
 
     state.validate(pi, pibar, row_max)
     torch.testing.assert_close(
-        state.reconstruct_pibar(pibar), torch.ones_like(pi, dtype=accumulator_dtype)
-    )
-    torch.testing.assert_close(
-        state.reconstruct_pibar_row_max(row_max),
-        torch.zeros(2, device="cuda", dtype=accumulator_dtype),
+        PiState.reconstruct_rows(pibar, state.pibar_offset), torch.ones_like(pi, dtype=accumulator_dtype)
     )
 
 

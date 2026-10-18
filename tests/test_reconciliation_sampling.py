@@ -7,6 +7,18 @@ pytestmark = pytest.mark.gpu
 RELEASE = Path(__file__).parent / "data" / "release"
 
 
+def _leaf_genes(tree):
+    """The gene names at the leaves of a sampled reconciliation."""
+    out, stack = [], [tree.root]
+    while stack:
+        node = stack.pop()
+        if node.left is None:
+            out.append(node.gene)
+        else:
+            stack.extend((node.right, node.left))
+    return out
+
+
 @pytest.fixture
 def result(monkeypatch):
     if not torch.cuda.is_available():
@@ -32,7 +44,7 @@ def test_every_gene_appears_once_in_its_species(result):
         gene_species = dict(zip(family["leaf_gene_names"], family["leaf_col_index"]))
         assert len(trees) == 5
         for tree in trees:
-            assert sorted(tree.genes()) == sorted(family["leaf_gene_names"])
+            assert sorted(_leaf_genes(tree)) == sorted(family["leaf_gene_names"])
             leaves = [e for e in tree.events() if e.kind == "Leaf"]
             assert len(leaves) == len(gene_species)
             for event in tree.events():

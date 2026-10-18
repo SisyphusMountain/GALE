@@ -3,12 +3,12 @@
 # ``GpurecConfig`` (gpurec/config/gpurec_config.py) is the SOURCE OF TRUTH: this
 # file is checked against it by the permanent guard test
 # ``test_defaults_toml_matches_dataclass_defaults`` (tests/test_config_toml.py),
-# which asserts ``GpurecConfig.from_toml(this file) == GpurecConfig()``. If you
+# which asserts that this file, merged onto ``GpurecConfig()``, equals ``GpurecConfig()``. If you
 # change a dataclass default, update this file (and vice versa) or that test
 # will fail.
 #
-# A user-supplied TOML file need only list the fields it wants to override --
-# ``GpurecConfig.from_toml``/``from_dict`` deep-merge onto these defaults.
+# A user-supplied TOML file (``--config``) need only list the fields it wants to
+# override: ``load_fit_config`` deep-merges it onto its starting configuration.
 #
 # NOTE ON OMITTED FIELDS: TOML has no null/None literal. Every field below whose
 # dataclass default is ``None`` is therefore left OUT of this file entirely (the

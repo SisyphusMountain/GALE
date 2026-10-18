@@ -57,17 +57,6 @@ class ReconciledGeneTree:
                 stack.append(node.left)
         return out
 
-    def genes(self) -> list[str]:
-        out, stack = [], [self.root]
-        while stack:
-            node = stack.pop()
-            if node.left is None:
-                out.append(node.gene)
-            else:
-                stack.append(node.right)
-                stack.append(node.left)
-        return out
-
     @property
     def origin(self) -> int:
         return self.root.events[0].species

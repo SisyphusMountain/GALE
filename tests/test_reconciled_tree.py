@@ -16,7 +16,7 @@ def test_speciation_with_loss_and_leaves():
     assert tree.root.left.events == (Event("SL", AB, A, B, "S"), Event("Leaf", A, -1, -1, "SL"))
     assert tree.root.left.gene == "a1"
     assert tree.root.right.events == (Event("Leaf", C, -1, -1, "S"),)
-    assert tree.genes() == ["a1", "c1"]
+    assert tree.root.right.gene == "c1"
     assert tree.origin == R
     assert [e.kind for e in tree.events()] == ["S", "SL", "Leaf", "Leaf"]
 
@@ -42,7 +42,7 @@ def test_transfer_with_donor_loss():
 def test_single_leaf_tree():
     tree = tree_from_sampler_nodes([("leaf", A, [-1, -1], 0)], {0: "a1"})
     assert tree.root.events == (Event("Leaf", A, -1, -1, "S"),)
-    assert tree.genes() == ["a1"]
+    assert tree.root.gene == "a1" and tree.root.left is None
 
 
 def test_deep_caterpillar_does_not_hit_the_recursion_limit():
@@ -56,4 +56,4 @@ def test_deep_caterpillar_does_not_hit_the_recursion_limit():
     nodes.append(("leaf", A, [-1, -1], depth))
     clade_to_gene[depth] = f"g{depth}"
     tree = tree_from_sampler_nodes(nodes, clade_to_gene)
-    assert len(tree.genes()) == depth + 1
+    assert sum(event.kind == "Leaf" for event in tree.events()) == depth + 1

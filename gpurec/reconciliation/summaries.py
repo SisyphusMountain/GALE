@@ -75,13 +75,3 @@ def origin_texts_from_counts(
         lines += [f"{species.labels[src]}, {format_number(count / n_samples)}\n" for count, _, src in sources]
         texts[node] = "".join(lines)
     return texts
-
-
-def origin_texts(samples: dict[str, list[ReconciledGeneTree]], species: SpeciesTree, n_samples: int) -> dict[int, str]:
-    """``origins/<label>.txt``: how often a lineage in each species arrived vertically or by transfer."""
-    n = len(species.labels)
-    vertical = [0.0] * n
-    by_transfer = [[0.0] * n for _ in range(n)]  # [source][destination]
-    for trees in samples.values():
-        add_origin_counts(trees, vertical, by_transfer, species)
-    return origin_texts_from_counts(vertical, by_transfer, species, n_samples)

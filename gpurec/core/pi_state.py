@@ -110,12 +110,3 @@ class PiState:
         if offset.device != residual.device:
             raise TypeError("offset must be on the residual device")
         return residual.to(dtype=offset.dtype) + offset[:, None]
-
-    def reconstruct_pi(self, pi_residual: torch.Tensor) -> torch.Tensor:
-        return self.reconstruct_rows(pi_residual, self.pi_offset)
-
-    def reconstruct_pibar(self, pibar_residual: torch.Tensor) -> torch.Tensor:
-        return self.reconstruct_rows(pibar_residual, self.pibar_offset)
-
-    def reconstruct_pibar_row_max(self, pibar_row_max: torch.Tensor) -> torch.Tensor:
-        return pibar_row_max.to(dtype=self.pi_offset.dtype) + self.pi_offset

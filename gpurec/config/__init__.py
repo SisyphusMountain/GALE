@@ -9,7 +9,6 @@ from gpurec.config.gpurec_config import (
     GpurecConfig,
     dtype_rel_tol_default,
     dtype_rel_tol_floor,
-    load_config,
     load_fit_config,
 )
 from gpurec.config.memory import MemoryOptions
@@ -26,26 +25,8 @@ from gpurec.api.solver_options import SolverOptions
 __all__ = [
     "dtype_rel_tol_default", "dtype_rel_tol_floor",
     "GpurecConfig", "SolverOptions", "PrecisionOptions", "NewtonOptions", "RateBounds",
-    "PenaltyOptions", "MemoryOptions", "normalize_dtype_name", "resolve_torch_dtype",
+    "MemoryOptions", "normalize_dtype_name", "resolve_torch_dtype",
     "torch_dtype_name",
-    "DEFAULTS_TOML_PATH", "load_config", "load_fit_config",
+    "DEFAULTS_TOML_PATH", "load_fit_config",
 ]
 
-
-def __getattr__(name):
-    # ``PenaltyOptions`` (re-exported from ``gpurec.solver.penalties``) is
-    # resolved lazily on first attribute access (PEP 562) rather than via a
-    # top-level import: a top-level ``from gpurec.solver.penalties import
-    # PenaltyOptions`` here forces ``gpurec.solver``'s package ``__init__`` to
-    # run, which -- via ``value_and_grad`` -> ``gpurec.api._execution`` ->
-    # ``gpurec.api._implicit_grad`` -- imports back into a still-partially-
-    # initialized ``gpurec.api._implicit_grad`` module (the module that
-    # imports *this* package for the dtype-tol helpers in the first place),
-    # raising a circular-import ``ImportError``. See the matching note in
-    # ``gpurec/config/gpurec_config.py`` for the full chain. By the time any
-    # caller actually accesses ``gpurec.config.PenaltyOptions``, package
-    # loading has finished and the import below is a plain cached lookup.
-    if name == "PenaltyOptions":
-        from gpurec.solver.penalties import PenaltyOptions
-        return PenaltyOptions
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

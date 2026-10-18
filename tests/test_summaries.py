@@ -1,9 +1,10 @@
 from gpurec.io.species_tree import species_tree_from_arrays
 from gpurec.reconciliation.files import species_event_counts
 from gpurec.reconciliation.summaries import (
+    add_origin_counts,
     mean_species_event_counts,
     mean_transfers,
-    origin_texts,
+    origin_texts_from_counts,
     transfers_table_text,
 )
 from gpurec.reconciliation.tree import tree_from_sampler_nodes
@@ -29,7 +30,10 @@ def test_means_over_samples():
 
 
 def test_origins():
-    texts = origin_texts({"fam": [SPECIATION, TRANSFER]}, SPECIES, 2)
+    vertical = [0.0] * 5
+    by_transfer = [[0.0] * 5 for _ in range(5)]
+    add_origin_counts([SPECIATION, TRANSFER], vertical, by_transfer, SPECIES)
+    texts = origin_texts_from_counts(vertical, by_transfer, SPECIES, 2)
     assert texts[C] == "vertical: 0.5\nA, 0.5\n"
     assert texts[B] == "vertical: 0.5\n"
     assert texts[R] == "vertical: 0\n"
