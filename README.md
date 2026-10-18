@@ -189,9 +189,7 @@ post-order. These names are used in every file.
 
 The command line samples and writes one batch of families at a time and
 keeps only running totals for the whole-dataset files, so its memory use
-does not grow with the number of families. From Python,
-`FitResult.sample_reconciliations` returns every family's samples at once
-(a dictionary), which does.
+does not grow with the number of families.
 
 - `reconciliations/all/<family>_sample_<i>.xml`: RecPhyloXML with the same
   header, elements and nesting as AleRax's writer: `<spTree>`, then
@@ -280,7 +278,7 @@ path).
 it gives values only, not what each field means. This section says which
 `[solver]` fields each step reads; some fields also have an explanatory
 comment in `gpurec/api/solver_options.py`. Those are the plain dataclass
-defaults (`load_config`'s starting point). Fitting — the command line and
+defaults. Fitting — the command line and
 `load_fit_config` — instead starts from `GpurecConfig.genewise_reference()`,
 which changes some `[solver]` tolerances and sets the rate box to
 `[1e-6, 2.0]` (`defaults.toml`'s own `[rates]` values are not what the

@@ -6,7 +6,6 @@ First release. Based on the development state of 4 August 2026 (commit 27cdc472)
 
 ### Added
 - Released under GPL-3.0-or-later.
-- Python interface: `load_families`, `fit`, `evaluate`, `FitResult.sample_reconciliations`, `write_alerax`.
 - `gpurec` command line taking AleRax 1.4.0's arguments and writing its output files.
 - Mapping files (both AleRax formats), fraction-missing files and AleRax's family filtering.
 - Reconciliation samples in RecPhyloXML with per-sample and summary count files.
@@ -28,8 +27,6 @@ First release. Based on the development state of 4 August 2026 (commit 27cdc472)
 - `fit_global` and `fit_genewise` take parsed families (`FamilyData`) and explicit start rates
   instead of file paths.
 - A family file whose `key=` has an empty value is now an error.
-- `sample_reconciliations(model, family_index, seed)` requires both arguments and raises
-  `IndexError` for a family index that is in no batch.
 - Python 3.10 is not supported (the config loader needs `tomllib`, Python 3.11+).
 - The `GPUREC_MEMORY_POLICY_FRACTION` / `GPUREC_MEMORY_POLICY_RESERVE_GIB` environment variables
   are gone and the GPU memory budget is fixed in 0.1 (85% of total GPU memory, minus 1 GiB of
@@ -55,8 +52,7 @@ First release. Based on the development state of 4 August 2026 (commit 27cdc472)
 - The command line samples and writes reconciliations one batch of families at a time and keeps
   only running totals for the whole-dataset files, so its memory use no longer grows with the
   number of families. New building blocks: `gpurec.reconciliation.sampling.iter_family_reconciliations`
-  and `gpurec.io.alerax_output.ReconciliationWriter`. `FitResult.sample_reconciliations` still
-  returns every family's samples in one dictionary.
+  and `gpurec.io.alerax_output.ReconciliationWriter`.
 - `gpurec.log` records the rates (GLOBAL: one line; PER-FAMILY: the range of each rate, and one line
   per family with `--verbose-opt`) and Python warnings (such as the float32 tolerance
   `RuntimeWarning`), which also appear on the screen in the log format.

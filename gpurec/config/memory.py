@@ -19,4 +19,3 @@ class MemoryOptions:
     min_free_gib_driver: float = 4.0  # value_and_grad cache-empty gate
     min_free_gib_hvp: float = 8.0     # curvature HVP-rebuild gate
     free_cache_every: int = 32        # empty CUDA cache every-K-waves
-    grad_avg_k: int = 1               # backward passes averaged
