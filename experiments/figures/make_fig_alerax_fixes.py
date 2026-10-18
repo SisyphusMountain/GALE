@@ -47,7 +47,7 @@ for ax, (title, a) in zip(axes, versions):
     ax.set_xscale("log"); ax.set_yscale("symlog", linthresh=1e-4)
     ax.set_title(title, fontsize=9.5)
     ax.spines[["top", "right"]].set_visible(False)
-for ax in grid[:, 0]: ax.set_ylabel("gpurec minus AleRax (nats)")
+for ax in grid[:, 0]: ax.set_ylabel("GALE minus AleRax (nats)")
 for ax in grid[1, :]: ax.set_xlabel("$-$log-likelihood of the family (nats)")
 axes[0].legend(title="log-likelihood", fontsize=7.5, title_fontsize=7.5, frameon=False, loc="upper left")
 fig.tight_layout(); fig.savefig(out); print("written", out)

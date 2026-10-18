@@ -4,6 +4,9 @@ Parts (one GPU job at a time):
                of fixed-point iterations (appendix "Managing the fixed-point iterations")
   grad-test    measure/grad_test.py: cost of the gradient against the loss alone, and the gradient against finite
                differences (section "The gradient by implicit differentiation")
+  grad-resid   measure/grad_resid.py: the first 20 families of the 200-family set in double precision, the gradient
+               against central finite differences with adjoint pruning on and truly off (where the difference of 1e-4
+               of grad-test comes from)
   launch-cost  measure/launch_cost.py: the cost of one kernel launch (Figure 1 of the paper)
   mem-scan     measure/mem_scan.py: peak GPU memory against the clade limit of a batch, 200-family set
   hardware     measure/hw_bench.py twice (hardware_1.json, hardware_2.json): matrix products and memory copies on the
@@ -24,6 +27,11 @@ def grad_test(paths):
                 CONFIGS / "single_precision.toml", CONFIGS / "double_precision.toml"])
 
 
+def grad_resid(paths):
+    run_python(output_dir(paths, "measurements"), "grad_resid", "measure/grad_resid.py",
+               [hogenom_families_file(paths, "hogenom_200"), hogenom_species_tree(paths), CONFIGS / "double_precision.toml"])
+
+
 def mem_scan(paths):
     run_python(output_dir(paths, "measurements"), "mem_scan", "measure/mem_scan.py",
                [hogenom_families_file(paths, "hogenom_200"), hogenom_species_tree(paths), CONFIGS / "single_precision.toml"])
@@ -38,6 +46,7 @@ def hardware(paths):
 PARTS = {
     "kscan": kscan,
     "grad-test": grad_test,
+    "grad-resid": grad_resid,
     "launch-cost": lambda paths: run_python(output_dir(paths, "measurements"), "launch_cost", "measure/launch_cost.py", []),
     "mem-scan": mem_scan,
     "hardware": hardware,

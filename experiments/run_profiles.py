@@ -3,7 +3,9 @@ section "Example", paragraph "Speed"; appendix "Details of the experiments", par
 OUTPUT_ROOT/profiles.
 Parts:
   gpurec-nsys              the full fit of gpurec under NVIDIA Nsight Systems (nsys profile), with the NVTX ranges of
-                           wrappers/gpurec_nvtx.py, then the two summary reports as CSV files (full_nvtx_gpu_proj_sum.csv,
+                           wrappers/gpurec_nvtx.py (ranges 'gradient', 'hessian', 'model build'), then the profile
+                           exported as an SQLite database (full.sqlite, read by analysis/split_gradient_ranges.py and
+                           figures/make_fig_times.py) and the two summary reports as CSV files (full_nvtx_gpu_proj_sum.csv,
                            full_cuda_gpu_kern_sum.csv) read by analysis/nsys_shares.py
   alerax-callgrind         AleRax as released fitting the rates of one median-size HOGENOM family (CLU_005170_8_0_C) on
                            one process: first a plain timed run (alerax_plain), then the same under valgrind's callgrind
@@ -29,6 +31,9 @@ def gpurec_nsys(paths):
                          hogenom_families_file(paths, "hogenom_all"), hogenom_species_tree(paths), [])),
                      folder / "full.time", folder / "full.log", folder / "full.err", folder)
     log_progress(folder / "progress.txt", f"full: exit={code}")
+    code = run_logged([nsys, "export", "--type", "sqlite", "--force-overwrite", "true", "--output", "full.sqlite",
+                       "full.nsys-rep"], folder / "nsys_export.log", folder / "nsys_export.err", folder)
+    log_progress(folder / "progress.txt", f"nsys export: exit={code}")
     code = run_logged([nsys, "stats", "--report", "nvtx_gpu_proj_sum", "--report", "cuda_gpu_kern_sum", "--format", "csv",
                        "--output", "full", "full.nsys-rep"], folder / "nsys_stats.log", folder / "nsys_stats.err", folder)
     log_progress(folder / "progress.txt", f"nsys stats: exit={code}")

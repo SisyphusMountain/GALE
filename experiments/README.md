@@ -134,9 +134,10 @@ Times in the last column are those of the paper's runs (RTX 4090 and i9-13900K) 
 | gpurec on all families, two runs: `\tFull`, `\tFullMin`, `\tFullRunA`, `\tFullRunB`, `\dRuns`; data set size `\nFamilies`, `\nClades`, `\nBranches` (lines "Remaining families" and "clades x species" of the log) | `python $E/run_hogenom.py $P gpurec-full` | `hogenom/full_1.err`, `full_2.err`; `python $E/analysis/run_summary.py OUTPUT_ROOT/hogenom 'full_?'` | 2 x 12.5 min |
 | AleRax on all families (eight chunks): `\tAleRax`, `\tAleRaxHours`; with the above, `\speedup` | `python $E/run_hogenom.py $P alerax-full` | `hogenom/alerax_full_timing.txt` (seconds per chunk; the driver prints the sum), `alerax_full_per_fam_likelihoods.txt` | 4.9 h |
 | Timed run, where the time goes: `\tInstr`, `\tGrad`, `\nGradCalls`, `\tHess`, `\nHessCalls`, `\tBuild`, `\nBuilds` | `python $E/run_hogenom.py $P gpurec-full-timers` | the table at the end of `hogenom/full_timers.log`; "done in" of `full_timers.err` | 14.5 min |
-| Figure `fig_times_gpu` | `python $E/figures/make_fig_times.py $P fig_times_gpu.pdf` | needs the three parts above | seconds |
+| Figure `fig_times_gpu` (Figure 2): (a) the full-set times, (b) the shares of the profiled run | `python $E/figures/make_fig_times.py $P fig_times_gpu.pdf` | needs `gpurec-full`, `alerax-full` and `run_profiles.py gpurec-nsys` (panel b runs `analysis/split_gradient_ranges.py` on the profile) | about 15 s |
 | Agreement at the optimum, full set: `\dMedian`, `\dMean`, `\dTotal`, `\nWorse`, `\nBetter`, `\pearson` | (the two parts above) | `python $E/analysis/agreement.py OUTPUT_ROOT/hogenom/out_full_timers/per_fam_likelihoods.txt OUTPUT_ROOT/hogenom/alerax_full_per_fam_likelihoods.txt` | seconds |
-| Nsight Systems profile: `\prTRun`, `\prHess`, `\prGrad`, `\prBuild`, `\prBusy`, `\prKOne`, `\prKTwo`, `\prKThree` | `python $E/run_profiles.py $P gpurec-nsys` | `python $E/analysis/nsys_shares.py OUTPUT_ROOT/profiles/full_nvtx_gpu_proj_sum.csv OUTPUT_ROOT/profiles/full_cuda_gpu_kern_sum.csv OUTPUT_ROOT/profiles/full.err` | 12 min, then several minutes for `nsys stats` |
+| Nsight Systems profile: `\prTRun`, `\prHess`, `\prGrad`, `\prBuild`, `\prBusy`, `\prKOne`, `\prKTwo`, `\prKThree` | `python $E/run_profiles.py $P gpurec-nsys` | `python $E/analysis/nsys_shares.py OUTPUT_ROOT/profiles/full_nvtx_gpu_proj_sum.csv OUTPUT_ROOT/profiles/full_cuda_gpu_kern_sum.csv OUTPUT_ROOT/profiles/full.err` | 12 min, then several minutes for `nsys export` and `nsys stats` |
+| Where the time of the profiled run goes (Figure 2b): `\prTLik` (forward pass of the loss-and-gradient evaluations), `\prTBack` (backward pass), `\prTHess`, `\prTBuild`, `\prTTotal`, `\prLik`, `\prBack`, `\prOther` | (the part above) | `python $E/analysis/split_gradient_ranges.py OUTPUT_ROOT/profiles/full.sqlite OUTPUT_ROOT/profiles/full.err`: seconds and share of each part. On the paper's profile it prints forward 135.6 s, backward 161.8 s, hessian 361.3 s, model build 37.5 s, other 34.3 s (4.7 %), total 730.5 s | about 15 s |
 | The 506- and 1,042-family sets: `\tFiveHundred`, `\nFiveHundred`, `\nOneK`, and the nine runs `\tOneKRebatchMin`, `\tOneKRebatchMax`, `\tOneKRebatchMed` | `python $E/run_hogenom.py $P gpurec-506`, `... gpurec-1042`; the nine runs are `set1042_1..3` here, `warm_on_1..3` and `removal_on_1..3` of `run_warm_rebatch.py` | `run_summary.py` on `hogenom` and `warm_rebatch` | 3.2 min; 3 x 3.5 min |
 
 ### Agreement with AleRax at fixed rates (section "Example", appendix "Numerical accuracy")
@@ -149,6 +150,7 @@ Times in the last column are those of the paper's runs (RTX 4090 and i9-13900K) 
 | 4 against 64 passes of AleRax, 200 families: `\aIterMax`, `\aIterMed`, `\aIterN`; 16 passes equal 64 to 1e-12 | `python $E/run_fixed_rates.py $P alerax-200-passes` | `compare_fixedrate.py OUTPUT_ROOT/fixed_rates/out_passes_64_200/per_fam_likelihoods.txt OUTPUT_ROOT/fixed_rates/out_passes_4_200/per_fam_likelihoods.txt` (the 64-pass file takes the place of gpurec's; same with `passes_16_200`) | about 15 min |
 | Figure `fig_alerax_fixes` | `python $E/figures/make_fig_alerax_fixes.py $P fig_alerax_fixes.pdf` | needs `gpurec-1042` and `alerax-1042` | seconds |
 | gpurec's default command with `--fix-rates`: `\tGpuFix` ("done in"), `\tGpuFixCmd` (wall time) | `python $E/run_fixed_rates.py $P gpurec-cli-1042` | `run_summary.py OUTPUT_ROOT/fixed_rates cli_1042` | 17 s |
+| Tails of the agreement comparisons (99th and 95th percentiles of the per-family differences): `\fxStockPNine`, `\fxStockPFive`, `\fxPatPNine`, `\fxPatPFive`, `\fxFixPNine`, `\fxFixPFive`, `\fxAllPNine`, `\fxAllPFive` (Table `tab:agree`), `\archFxPNine`, `\archFxPFive`, `\pPNine`, `\pPFive`, `\fpFitPNine`, `\fpFitPFive`, `\fpRunPNine`, `\fpRunPFive`, `\aIterPNine`, `\aIterPFive`, `\dLowPOne`, `\dLowMax` (full-set optima, gpurec minus AleRax: 1st percentile and lowest), `\agMaxAbs`, `\agMaxRel` (main text: the 200 families of `hogenom_200.txt` at fixed rates against the four changes) | the parts named in the docstring of the script: `run_fixed_rates.py` `gpurec-1042`, `alerax-1042`, `alerax-200-passes`; `run_archaea.py fixed-rates-200`; `run_precision.py all-families`, `double-fits`; `run_hogenom.py gpurec-full`, `gpurec-full-timers`, `alerax-full` | `python $E/analysis/agreement_tails.py OUTPUT_ROOT` (skips a comparison whose files are missing) | seconds |
 | The five reference cases of the package (single precision within 1.5e-5 nats of AleRax, double within 1e-12) | the package's own test, `pytest tests/test_fidelity_alerax.py` | the test checks bounds of 1e-3 nats (single) and 1e-8 (double); the paper's values were read from a run of these cases | seconds |
 
 ### Agreement of the optima, 200 random families (appendix "Details of the experiments")
@@ -167,9 +169,9 @@ Times in the last column are those of the paper's runs (RTX 4090 and i9-13900K) 
 | 22 random batches (appendix): `\scBatchMed`, `\scBatchMin`, `\scBatchMax` | `python $E/run_scaling.py $P gpurec-batches`, `... alerax-batches` | `python $E/analysis/batch_ratios.py OUTPUT_ROOT/scaling` | 15 min; about 5 h |
 | Figure `fig_scaling` | `python $E/figures/make_fig_scaling.py $P fig_scaling.pdf` | needs `small-draws`, `gpurec-nested-large`, `alerax-nested` and `run_hogenom.py` parts `gpurec-full` and `alerax-full`; prints the numbers of the paragraph "Scaling" | seconds |
 | 20 random sets each of 1, 3, 10 and 30 families: `\drawROne`, `\drawFastOne`, `\drawRThree`, `\drawFastThree`, `\drawRTen`, `\drawRThirty`, and the ranges of times quoted in the text | `python $E/run_scaling.py $P small-draws` | `python $E/analysis/small_draws.py OUTPUT_ROOT/scaling/small_draws` (also printed by the figure script) | about 1.5 h |
-| Table `tab:ablations`: `\ablBase`, `\ablAlone`, `\ablAloneX`, `\ablNoEvict`, `\ablNoEvictX`, `\ablNoEvictLoss`, `\ablNoWarm`, `\ablNoWarmX`, `\ablBySize`, `\ablBySizeX`, `\ablInput`, `\ablInputX`, and the peak memories | `for m in base alone noevict nowarm bysize inputorder; do python $E/run_ablations.py $P $m; done` | `python $E/analysis/ablations.py OUTPUT_ROOT/ablations` | 3 runs per configuration: 3.5, 80, 35, 6, 4, 4 min |
-| Table `tab:ablations`, last three rows: `\ablBaseB` (release settings again, same session), `\ablNoPrune`, `\ablStoreAlpha` | `for m in base-again nopruning storealpha; do python $E/run_ablations.py $P $m; done` | `analysis/ablations.py` as above | 3 runs per configuration, about 3.5 min each |
-| What pruning skips: clades skipped, time and gradient with pruning on, with `use_adjoint_pruning = false` alone (which skips the same clades) and truly off | `python $E/run_ablations.py $P pruning-check` (after `base`) | `ablations/pruning_check.log` | about 1 min |
+| Table `tab:ablations`, all rows from one session: `\ablBase`, `\ablAlone`, `\ablAloneX`, `\ablNoEvict`, `\ablNoEvictX`, `\ablNoEvictLoss`, `\ablNoWarm`, `\ablNoWarmX`, `\ablBySize`, `\ablBySizeX`, `\ablInput`, `\ablInputX`, `\ablStoreAlpha`, `\ablNoPrune` (adjoint pruning truly off: `data/configs/no_pruning.toml` sets `use_adjoint_pruning = false` and `adjoint_pruning_threshold = 0.0`), and the peak memories | `python $E/run_ablations.py $P session`: three rounds over base, alone, noevict, nowarm, bysize, inputorder, storealpha, nopruning, round 0 untimed, rounds 1 and 2 timed; before and after each run `progress.txt` records the load of the machine and the other processes on the GPU | `python $E/analysis/ablations.py session OUTPUT_ROOT/ablations/session`: per configuration the mean of rounds 1 and 2, the ratio to base, the peak GPU memory and total log-likelihood of each timed run, and a warning for any run with another process on the GPU (not to be used) | about 2.5 h (one round takes about 46 min at the times of the paper's table; round 0 also compiles) |
+| The same configurations, run one at a time (the earlier protocol): one untimed and two timed runs each; `base-again` is the release settings once more | `for m in base alone noevict nowarm bysize inputorder base-again nopruning storealpha; do python $E/run_ablations.py $P $m; done` | `python $E/analysis/ablations.py separate OUTPUT_ROOT/ablations` | 3 runs per configuration: 3.5, 80, 35, 6, 4, 4, 3.5, 4.5, 3.5 min |
+| What pruning skips: clades skipped, time and gradient with pruning on, with `use_adjoint_pruning = false` alone (which skips the same clades) and truly off (`\pruneSkipped`, `\pruneGradRel`) | `python $E/run_ablations.py $P pruning-check` (after `base`) | `ablations/pruning_check.log` | about 1 min |
 | Gradient with pruning off and with the stored split term (relative differences quoted in the comments of `numbers_gpu.tex`); size of the store and peak memory: `\alphaStoreMiB`, `\alphaPeakRecomp`, `\alphaPeakStore` | `python $E/run_ablations.py $P grad-check`, `... storealpha-check` | `ablations/grad_check.log`, `ablations/storealpha_check.log` | about 1 min each |
 
 ### Waves and family sizes (sections "Waves of clades", "Numbers"; appendix "Scheduling", "Where the time of AleRax goes")
@@ -201,6 +203,7 @@ Times in the last column are those of the paper's runs (RTX 4090 and i9-13900K) 
 | Result | Command | Output | Time |
 |---|---|---|---|
 | Gradient cost and check: `\tLossOnly`, `\tLossGrad`, `\fdRatioLow`, `\fdRatioHigh` (computed from these two times: 4 or 6 loss evaluations against one loss and gradient), `\gradFD` | `python $E/run_measurements.py $P grad-test` | `measurements/grad_test.log` | about 3 min |
+| Where the difference of `\gradFD` comes from: the gradient against finite differences (20 families, double precision, step 1e-2, converged forward solves) with adjoint pruning on and truly off (`use_adjoint_pruning = false` and threshold 0): `\gradFDNoPruneA` (rates 0.2, 0.3, 0.1), `\gradFDNoPruneB` (rates 0.05, 0.05, 0.05); with pruning on, about 1e-4 | `python $E/run_measurements.py $P grad-resid` | `measurements/grad_resid.log`: the paper's run printed 1.084e-04 and 1.300e-05 at (0.2, 0.3, 0.1), 8.327e-05 and 2.584e-06 at (0.05, 0.05, 0.05), each the same with 64 or 512 iterations and terms | about 6 min |
 | Fixed-point iterations: `\kSixteenMax`, `\kSixteenMed`, `\kSixteenN`, `\kThirtyTwoMax` | `python $E/run_measurements.py $P kscan` (after `run_hogenom.py gpurec-full`) | `measurements/kscan.log` | about 1 min |
 | Cost of one launch: `\tLaunch` (Figure 1) | `python $E/run_measurements.py $P launch-cost` | `measurements/launch_cost.log` | seconds |
 | Peak memory against the clade limit of a batch (`\memEightyK`) | `python $E/run_measurements.py $P mem-scan` | `measurements/mem_scan.log` | about 1 min |
@@ -270,18 +273,23 @@ they equal the stored lists.
   documentation.
   The configuration file `configs/fit_24gb_card.toml` used by some runs of 14 October (80,000 clades per batch, Hessian
   warm start off) holds the values that became the defaults at d48c48f7, so the plain command reproduces it.
-- **Run order.** For the first six ablations, the paper's queues ran two runs to fill the compile cache and then two
-  timed runs, the four separated by other runs; here each configuration runs once untimed and then twice timed, one
-  after the other, as the paper did for the last three rows of the table. The paper's "release settings again"
-  (`\ablBaseB`) were two timed runs without an untimed one, the cache being already warm. The runs of the 1,042-family
+- **Run order.** The table of ablations comes from one session that interleaves all the configurations (part
+  `session`, the protocol of the paper's script `results_gpu/scaling_ablations/queue5.sh` of 19 October 2026), so that
+  every row is measured in the same state of the machine. The parts that run one configuration at a time are the
+  earlier protocol: there each configuration runs once untimed and then twice timed, one after the other, whereas the
+  paper's earlier queues ran, for the first six configurations, two runs to fill the compile cache and then two timed
+  runs, the four separated by other runs, and the "release settings again" (`\ablBaseB`) as two timed runs without an
+  untimed one, the cache being already warm. The runs of the 1,042-family
   set were spread over several queues (`set1042`, `warm_on`, `removal_on`); the earlier run without removal of
   converged families (`\tOneKNoRebatch`, `run_norebatch.py`) set the same option as `removal_off` here (`drop_frac`
   above 1).
-- **Adjoint pruning off.** The paper's first run without pruning (`\ablNoPrune`, 18 October) set only
-  `use_adjoint_pruning = false`, which in release 0.1 skips the same clades as pruning on (`pruning-check` measures
-  it). `data/configs/no_pruning.toml` also sets the threshold to 0, so that `nopruning` and `grad-check` here compute
-  every clade; the paper's value of `\ablNoPrune` and the gradient difference "pruning off" in the comments of
-  `numbers_gpu.tex` are those of the earlier setting and are to be measured again.
+- **Adjoint pruning off.** The paper's first run without pruning (18 October) set only `use_adjoint_pruning = false`,
+  which in release 0.1 skips the same clades as pruning on (`pruning-check` measures it). `data/configs/no_pruning.toml`
+  also sets `adjoint_pruning_threshold = 0.0`, as the paper's later runs did, so that the configuration `nopruning` of
+  the session (`\ablNoPrune`) and `grad-resid` (`\gradFDNoPruneA`, `\gradFDNoPruneB`) compute every clade. Only the
+  relative gradient difference "pruning off" of `grad-check` quoted in the comments of `numbers_gpu.tex` (1.9e-7, 100
+  families) came from the earlier setting; `grad-check` here turns pruning truly off, so that number is to be measured
+  again.
 - **The double-precision fits** ran on two NVIDIA L40S cards of a computing cluster, one half of the families each, and
   were compared with two single-precision fits made on an NVIDIA H100 of the same cluster, with the code of d48c48f7.
   Here the halves are the first 5,434 families of `hogenom_all.txt` and the other 5,435 (the paper's first half kept
@@ -304,5 +312,6 @@ they equal the stored lists.
 - The cluster scripts of the H100 and L40S runs (double-precision fits) are only reconstructed (`run_precision.py
   double-fits`): the cluster folder was not available when these scripts were written.
 - The paper's values for the five reference cases of the package were read from a run of them, not written to a file.
-- `measure/grad_check.py` now turns pruning off with the threshold 0 as well (see "Adjoint pruning off"); the paper's
-  gradient difference "pruning off" came from the earlier setting.
+- `measure/grad_check.py` now turns pruning off with the threshold 0 as well (see "Adjoint pruning off"); the
+  gradient difference "pruning off" of 1.9e-7 in the comments of `numbers_gpu.tex` came from the earlier setting and has
+  not been measured again.

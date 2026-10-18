@@ -50,16 +50,16 @@ g_line = [st.median(draws_g[n]) for n in SIZES_DRAWS] + [st.mean(g_runs[n]) for 
 a_line = [st.median(draws_a[n]) for n in SIZES_DRAWS] + [a_runs[n] for n in SIZES_NESTED] + [a_full]
 ax.plot(xs, a_line, color=ALERAX, lw=2, marker="o", ms=6, zorder=3)
 ax.plot(xs, g_line, color=GPUREC, lw=2, marker="o", ms=6, zorder=3)
-for n in SIZES_DRAWS:
-    for vals, colour, shift in ((draws_g[n], GPUREC, 0.94), (draws_a[n], ALERAX, 1.06)):
-        ax.plot([n * shift, n * shift], [min(vals), max(vals)], color=colour, lw=1.2, alpha=0.6, zorder=2)
+for n in SIZES_DRAWS:      # range bars through the dots, at x = n; AleRax's drawn under gpurec's
+    for vals, colour, z in ((draws_a[n], ALERAX, 2), (draws_g[n], GPUREC, 2.5)):
+        ax.plot([n, n], [min(vals), max(vals)], color=colour, lw=1.2, alpha=0.6, zorder=z, solid_capstyle="butt")
 for n in SIZES_NESTED:
     ax.scatter([n, n], g_runs[n], s=10, color=GPUREC, zorder=4, linewidths=0)
 ax.set_xscale("log"); ax.set_yscale("log")
 ax.set_xlabel("families fitted", color=INK)
 ax.set_ylabel("wall time of the command (s)", color=INK)
 ax.text(N_FULL * 1.12, a_full, "AleRax 1.4.0\n24 cores", color=INK, va="center", fontsize=8.5)
-ax.text(N_FULL * 1.12, g_full, "gpurec\nRTX 4090", color=INK, va="center", fontsize=8.5)
+ax.text(N_FULL * 1.12, g_full, "GALE\nRTX 4090", color=INK, va="center", fontsize=8.5)
 ax.set_xlim(0.7, N_FULL * 4.5)
 ax.spines[["top", "right"]].set_visible(False)
 for s in ("left", "bottom"):

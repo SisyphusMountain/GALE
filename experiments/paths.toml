@@ -29,6 +29,8 @@ mpiexec = "mpiexec"
 # stopped alone. The paper's runs used systemd-run with a cap between 80 and 115 GB. Use [] for no cap.
 alerax_memory_cap = ["systemd-run", "--user", "--scope", "-q", "-p", "MemoryMax=100G"]
 nsys = "nsys"
+# NVIDIA's command-line tool, which lists the processes on the GPU (run_ablations.py session records them).
+nvidia_smi = "nvidia-smi"
 valgrind = "valgrind"
 callgrind_annotate = "callgrind_annotate"
 # Triton's cache of compiled kernels (by default ~/.triton/cache, written out in full here). The scripts count its
@@ -38,6 +40,12 @@ triton_cache = "/home/USER/.triton/cache"
 [machine]
 # MPI processes of every AleRax run on many families: the paper used the 24 cores of an Intel i9-13900K.
 alerax_ranks = 24
+# Processes on the GPU that run_ablations.py session does not count as other programs: those whose name, as nvidia-smi
+# lists it, contains one of these strings (programs of the desktop that hold the GPU without computing on it). The
+# paper's session left out "desktop", "portal", "/code" (the editor) and "claude". Choose strings that cannot match a
+# Python program: on the paper's machine "/code" also matched any program under a folder named "code", gpurec's own
+# Python included. Use [] to count every process.
+gpu_processes_not_counted = ["desktop", "portal", "/code", "claude"]
 
 [output]
 # Every script writes under this folder, one sub-folder per experiment (hogenom, scaling, ablations, ...).
