@@ -28,7 +28,7 @@ accumulator.
 | single-batch loss | supported forward path |
 | streamed and genewise multi-batch loss | supported; configured accumulator dtype is preserved across accumulation |
 | single-batch gradient | supported by the native offset-aware first-order adjoint |
-| streamed/genewise gradients and optimization closures | supported by the native offset-aware first-order adjoint |
+| streamed/genewise gradients | supported by the native offset-aware first-order adjoint |
 | Pi/backward convergence diagnostics | supported in centered frames |
 | reconciliation backtracking | reconstructs only the selected family; the native sampler boundary converts to f64 because its host ABI requires f64 arrays |
 | JVP/tangent kernels | supported with native Pi/DTS frame corrections |

@@ -10,11 +10,10 @@ from gpurec.solver.value_and_grad import (
     FORWARD_SAVED_NAMES,
     forward_solve,
     free_cuda_cache_if_tight,
-    make_value_and_grad,
 )
 
 __all__ = [
-    "FORWARD_SAVED_NAMES", "forward_solve", "free_cuda_cache_if_tight", "make_value_and_grad",
+    "FORWARD_SAVED_NAMES", "forward_solve", "free_cuda_cache_if_tight",
     "OriginationPenalty", "origination_penalty_and_grad", "tv_prior_and_grad",
     "group_expand", "group_reduce",
 ]

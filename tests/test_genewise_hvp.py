@@ -11,8 +11,24 @@ import torch
 
 from gpurec import GeneReconModel, SolverOptions
 from gpurec.solver.hvp.exact import make_exact_hvp
-from gpurec.solver.value_and_grad import forward_solve, make_value_and_grad
+from gpurec.api._execution import stream_batches
+from gpurec.solver.value_and_grad import forward_solve
 from gpurec.config import GpurecConfig
+
+
+def _value_and_grad(statics, receiver_weights, theta_shape):
+    """``vg(theta_vec, warm_E=...) -> (loss, flat gradient)`` over ``statics`` (genewise ``theta``)."""
+    from gpurec.solver.value_and_grad import free_cuda_cache_if_tight
+
+    def vg(theta_vec, *, warm_E):
+        free_cuda_cache_if_tight()
+        loss, grad, _, _ = stream_batches(
+            statics, theta_vec.detach().reshape(theta_shape).contiguous(), receiver_weights,
+            receiver_weights.new_zeros(receiver_weights.numel()), genewise=True, need_grad=True,
+        )
+        return float(loss), grad.reshape(-1).contiguous()
+
+    return vg
 
 
 def _fd_hessian_hvp(vg, theta_vec, warm_E, *, eps):
@@ -133,7 +149,7 @@ def test_genewise_theta_hvp_matches_fd():
 
     _l, sv = forward_solve([static], theta, rw)
     hvp = make_exact_hvp([static], theta, rw, sv, tangent_self_iters=128)
-    fd = _fd_hessian_hvp(make_value_and_grad([static], rw, theta_shape=(F, 3)),
+    fd = _fd_hessian_hvp(_value_and_grad([static], rw, (F, 3)),
                          theta.reshape(-1).contiguous(), None, eps=1e-5)
 
     probes = []
@@ -212,7 +228,7 @@ def test_genewise_point_cache_warm_start_matches_fd_across_repeated_calls():
         "static.warm_v was reassigned instead of reused across calls -- the warm-start gate "
         "must only create a fresh dict when static.warm_v is None, never unconditionally"
     )
-    fd1 = _fd_hessian_hvp(make_value_and_grad([static], rw, theta_shape=(F, 3)),
+    fd1 = _fd_hessian_hvp(_value_and_grad([static], rw, (F, 3)),
                           theta1.reshape(-1).contiguous(), None, eps=1e-5)
     for j in range(3):
         u = torch.zeros(F, 3, device="cuda", dtype=torch.float64); u[:, j] = 1.0
@@ -282,7 +298,7 @@ def test_genewise_tangent_warm_start_matches_fd():
     theta1 = theta0 + 0.01
     _l1, sv1 = forward_solve([static], theta1, rw)
     hvp1 = make_exact_hvp([static], theta1, rw, sv1, tangent_self_iters=128)
-    fd1 = _fd_hessian_hvp(make_value_and_grad([static], rw, theta_shape=(F, 3)),
+    fd1 = _fd_hessian_hvp(_value_and_grad([static], rw, (F, 3)),
                           theta1.reshape(-1).contiguous(), None, eps=1e-5)
     for j in range(3):
         u = torch.zeros(F, 3, device="cuda", dtype=torch.float64); u[:, j] = 1.0

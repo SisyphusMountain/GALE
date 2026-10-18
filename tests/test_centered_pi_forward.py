@@ -6,7 +6,6 @@ import torch
 
 from gpurec import GeneReconModel, SolverOptions
 from gpurec.api._execution import stream_batches
-from gpurec.api._execution import evaluate_static_convergence
 from gpurec.core.inference.forward import pi_wave_forward
 from gpurec.core.inference.solver import solve_forward_residual, solve_resident_e_pi
 from gpurec.core.kernels.pi_forward import (
@@ -792,13 +791,6 @@ def test_pi_forward_matches_fp64_for_receiver_and_origination_cases(
         pi_iters=8,
         warm_start_E=None,
     )
-    convergence = evaluate_static_convergence(
-        model32.batch_statics[0],
-        model32.theta.detach(),
-        receiver32,
-        pi_iters_high=8,
-        neumann_terms=16,
-    )
     def loss_and_grads(model, receiver, origination):
         loss, *grads = stream_batches(
             model.batch_statics, model.theta.detach(), receiver, origination, genewise=model.genewise,
@@ -812,8 +804,6 @@ def test_pi_forward_matches_fp64_for_receiver_and_origination_cases(
     assert torch.isfinite(loss32).item()
     torch.testing.assert_close(loss32, loss64, rtol=0.0, atol=2e-5)
     torch.testing.assert_close(residual32, residual64, rtol=0.0, atol=2e-5)
-    torch.testing.assert_close(convergence[0], residual32, rtol=0.0, atol=0.0)
-    assert all(torch.isfinite(value).all().item() for value in convergence)
     for grad32, grad64 in zip(grads32, grads64):
         assert torch.isfinite(grad32).all().item()
         torch.testing.assert_close(grad32.double(), grad64, rtol=5e-5, atol=2e-5)

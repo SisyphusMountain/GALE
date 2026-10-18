@@ -142,7 +142,7 @@ gates pass.
 | split reduction | `core/kernels/pi_forward.py` | native DTS residual+offset producer, including one and multiple splits |
 | likelihood/streaming | `core/inference/solver.py`, `api/_execution.py` | preserve the accumulator-dtype scalar across batches and save the matching offsets |
 | first-order adjoint | `core/kernels/wave_backward*.py`, `api/_implicit_grad.py` | offset-aware wave and cross-DTS ratios; the same canonical path in fp64/fp64 is the oracle |
-| convergence diagnostics | `core/inference/solver.py`, `api/_execution.py` | compare represented absolute iterates or frame-aligned residuals |
+| convergence diagnostics | `core/inference/solver.py` | compare represented absolute iterates or frame-aligned residuals |
 | backtracking | `core/backtracking/*` | never serialize or replay a residual without its offsets; the native host ABI still requires f64 arrays at its boundary |
 | JVP/tangent | `core/kernels/wave_tangent.py`, `dts_tangent.py`, `solver/forward_tangent.py` | use offset-aware primal weights; tangent values themselves are gauge-invariant |
 | second order/HVP | `core/kernels/wave_so.py`, `dts_so.py`, `solver/hvp_exact.py` | use the same offset-aware primal weights as first order |
