@@ -1,0 +1,47 @@
+diff --git a/src/ale/AleEvaluator.cpp b/src/ale/AleEvaluator.cpp
+index b12c087..921d377 100644
+--- a/src/ale/AleEvaluator.cpp
++++ b/src/ale/AleEvaluator.cpp
+@@ -1,6 +1,8 @@
+ #include "AleOptimizer.hpp"
+ 
+ #include <algorithm>
++#include <cmath>
++#include <limits>
+ #include <fstream>
+ #include <memory>
+ 
+@@ -9,6 +11,15 @@
+ #include <parallelization/ParallelContext.hpp>
+ #include <search/SpeciesTransferSearch.hpp>
+ 
++// A likelihood below the smallest normal double is stored with fewer and fewer
++// correct digits (down to a single one at 4.9e-324), but its logarithm is still
++// a normal number, so testing the log-likelihood alone does not catch it.
++static bool needsScaledValues(double ll) {
++  static const double minNormalLogLikelihood =
++      std::log(std::numeric_limits<double>::min());
++  return !std::isnormal(ll) || ll < minNormalLogLikelihood;
++}
++
+ static MultiEvaluationPtr
+ createModel(SpeciesTree &speciesTree, const FamilyInfo &family,
+             const RecModelInfo &info, const double alpha,
+@@ -102,7 +113,7 @@ void AleEvaluator::resetEvaluation(unsigned int i, bool highPrecision) {
+     _highPrecisions[i] = 1;
+   } else {
+     _highPrecisions[i] = -1;
+-    if (!std::isnormal(ll)) {
++    if (needsScaledValues(ll)) {
+       resetEvaluation(i, true);
+     }
+   }
+@@ -165,7 +176,7 @@ double AleEvaluator::computeLikelihood(PerFamLL *perFamLL) {
+ 
+ double AleEvaluator::computeFamilyLikelihood(unsigned int i) {
+   auto ll = _evaluations[i]->computeLogLikelihood();
+-  if (_highPrecisions[i] == -1 && !std::isnormal(ll)) {
++  if (_highPrecisions[i] == -1 && needsScaledValues(ll)) {
+     // We are in the low precision mode (we use double)
+     // and it's not accurate enough, switch to the high
+     // precision mode and recompute the ll

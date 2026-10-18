@@ -292,6 +292,8 @@ sampling with Triton/CUDA kernels driven from a PyTorch module. A technical
 report describing the model and the algorithms will be linked here once it
 is written.
 
+The scripts that reproduce the experiments of the paper are in `experiments/` (see `experiments/README.md`).
+
 ## License
 
 gpurec is free software, distributed under the GNU General Public License,

@@ -1,0 +1,44 @@
+# Configuration of the experiment scripts: every path outside this repository, and the few facts about the machine
+# that the runs depend on. Copy this file, replace every value written in capitals, and pass the copy's path as the
+# first argument of every script (for instance: python experiments/run_hogenom.py my_paths.toml gpurec-full).
+# Use absolute paths.
+
+[data]
+# The folder "hogenom" of the AleRax data archive (Morel et al. 2024; see README.md). It holds
+# families/FAMILY/gene_trees/ufboot1000.MFP.geneTree.newick and the species tree under runs/MFP/...
+hogenom_root = "/ABSOLUTE/PATH/TO/alerax_data/hogenom"
+# The folder 3_Reconciliation/This_study of the archaeal deposit (Huang et al., Zenodo 18701544; see README.md).
+archaea_root = "/ABSOLUTE/PATH/TO/3_Reconciliation/This_study"
+# Only for the appendix figure on the waves of 1,055 HOGENOM families: a folder holding hogenom_S.tree,
+# hogenom_trees/FAMILY.trees and hogenom_mappings/FAMILY.map (see README.md).
+hogenom_1055_dir = "/ABSOLUTE/PATH/TO/HOGENOM"
+
+[alerax]
+# The five builds of AleRax 1.4.0 made from the patches of data/alerax (see README.md, "Building AleRax").
+released = "/ABSOLUTE/PATH/TO/alerax_released/build/bin/alerax"
+passes = "/ABSOLUTE/PATH/TO/alerax_passes/build/bin/alerax"
+addition = "/ABSOLUTE/PATH/TO/alerax_addition/build/bin/alerax"
+switch = "/ABSOLUTE/PATH/TO/alerax_switch/build/bin/alerax"
+four = "/ABSOLUTE/PATH/TO/alerax_four/build/bin/alerax"
+
+[tools]
+# GNU time, which records the wall time and the peak memory of a command (the option -v).
+time = "/usr/bin/time"
+mpiexec = "mpiexec"
+# Placed before every AleRax command: a memory cap, so that an AleRax run that outgrows the machine's memory is
+# stopped alone. The paper's runs used systemd-run with a cap between 80 and 115 GB. Use [] for no cap.
+alerax_memory_cap = ["systemd-run", "--user", "--scope", "-q", "-p", "MemoryMax=100G"]
+nsys = "nsys"
+valgrind = "valgrind"
+callgrind_annotate = "callgrind_annotate"
+# Triton's cache of compiled kernels (by default ~/.triton/cache, written out in full here). The scripts count its
+# entries before and after a run to know how many kernels were compiled during it.
+triton_cache = "/home/USER/.triton/cache"
+
+[machine]
+# MPI processes of every AleRax run on many families: the paper used the 24 cores of an Intel i9-13900K.
+alerax_ranks = 24
+
+[output]
+# Every script writes under this folder, one sub-folder per experiment (hogenom, scaling, ablations, ...).
+root = "/ABSOLUTE/PATH/TO/experiment_outputs"

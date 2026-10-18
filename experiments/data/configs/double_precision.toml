@@ -1,0 +1,4 @@
+# Double precision everywhere (same kernels, slower on a consumer card).
+[precision]
+model_dtype = "float64"
+accumulator_dtype = "float64"

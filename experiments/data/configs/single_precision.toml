@@ -1,0 +1,5 @@
+# The default precision of gpurec, written out: values stored in single precision ("working" precision), row offsets,
+# log-softmax of the rates and sums over families in double precision ("accumulator" precision).
+[precision]
+model_dtype = "float32"
+accumulator_dtype = "float64"

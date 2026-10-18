@@ -1,0 +1,22 @@
+--- a/ext/GeneRaxCore/src/maths/ScaledValue.hpp
++++ b/ext/GeneRaxCore/src/maths/ScaledValue.hpp
+@@ -110,8 +110,18 @@
+       std::cerr << *this << " - " << v << std::endl;
+       assert(false); // negative values not allowed
+       return v;
+-    } else {
++    } else if (v.scaler == NULL_SCALER) {
+       return *this;
++    } else {
++      // diagnostic: bring the smaller term into this bucket and subtract it,
++      // instead of ignoring it
++      double s = v.value;
++      for (int d = v.scaler - scaler; d > 0 && s != 0.0; --d) {
++        s *= JS_SCALE_THRESHOLD;
++      }
++      auto res = ScaledValue(value - s, scaler);
++      res.scale();
++      return res;
+     }
+   }
+ 

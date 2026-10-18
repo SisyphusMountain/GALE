@@ -1,0 +1,7 @@
+# Ablation: no adjoint pruning. The backward pass of release 0.1 skips a clade when the largest entry of its incoming
+# adjoint is below adjoint_pruning_threshold (1e-6). Setting use_adjoint_pruning = false alone only changes the test
+# from ">= threshold" to "> threshold" and skips the same clades; the threshold 0 keeps every clade whose adjoint is not
+# exactly zero (skipping those changes nothing). See measure/pruning_check.py.
+[solver]
+use_adjoint_pruning = false
+adjoint_pruning_threshold = 0.0

@@ -1,0 +1,185 @@
+diff --git a/src/ale/AleArguments.cpp b/src/ale/AleArguments.cpp
+index b8881ff..aff0c5f 100644
+--- a/src/ale/AleArguments.cpp
++++ b/src/ale/AleArguments.cpp
+@@ -12,6 +12,7 @@ const unsigned int DEFAULT_MIN_COVERED_SPECIES = 4;
+ const double DEFAULT_TRIM_FAMILY_RATIO = 0.0;
+ const double DEFAULT_MAX_SPLIT_RATIO = -1.0;
+ const double DEFAULT_DTL_RATES = 0.1;
++const int DEFAULT_FIXED_POINT_ITERATIONS = 4;
+ 
+ AleArguments::AleArguments(int iargc, char **iargv)
+     : argc(iargc), argv(iargv), reconciliationModelStr("UndatedDTL"),
+@@ -23,7 +24,8 @@ AleArguments::AleArguments(int iargc, char **iargv)
+       speciesSearchStrategy(SpeciesSearchStrategy::SKIP),
+       inferSpeciationOrders(false),
+       modelParametrization(ModelParametrization::GLOBAL), gammaCategories(1),
+-      recOpt(RecOpt::LBFGSB), fixRates(false), skipThoroughRates(false),
++      recOpt(RecOpt::LBFGSB),
++      fixedPointIterations(DEFAULT_FIXED_POINT_ITERATIONS), fixRates(false), skipThoroughRates(false),
+       highways(false), highwayCandidatesStep1(DEFAULT_HIGHWAY_CANDIDATES_1),
+       highwayCandidatesStep2(DEFAULT_HIGHWAY_CANDIDATES_2),
+       skipFamilyFiltering(false),
+@@ -91,6 +93,8 @@ AleArguments::AleArguments(int iargc, char **iargv)
+       gammaCategories = atoi(argv[++i]);
+     } else if (arg == "--rate-optimizer") {
+       recOpt = ArgumentsHelper::strToRecOpt(std::string(argv[++i]));
++    } else if (arg == "--fixed-point-iterations") {
++      fixedPointIterations = atoi(argv[++i]);
+     } else if (arg == "--fix-rates") {
+       fixRates = true;
+     } else if (arg == "--skip-thorough-rates") {
+@@ -260,6 +264,8 @@ void AleArguments::printSummary() const {
+   }
+   Logger::info << "\tRate optimizer: " << ArgumentsHelper::recOptToStr(recOpt)
+                << std::endl;
++  Logger::info << "\tFixed-point iterations: " << fixedPointIterations
++               << std::endl;
+   if (fixRates) {
+     Logger::info << "\tStarting model rates (d,l,t) = (" << d << "," << l << ","
+                  << t << ") will not be optimized" << std::endl;
+@@ -386,6 +392,8 @@ void AleArguments::printHelp() const {
+                << std::endl;
+   Logger::info << "\t--rate-optimizer {LBFGSB, GRADIENT, SIMPLEX, GSL_SIMPLEX}"
+                << std::endl;
++  Logger::info << "\t--fixed-point-iterations <number of passes, default "
++               << DEFAULT_FIXED_POINT_ITERATIONS << ">" << std::endl;
+   Logger::info << "\t--fix-rates" << std::endl;
+   Logger::info << "\t--verbose-opt" << std::endl;
+   Logger::info << "\t--gene-tree-rooting {UNIFORM, MAD, ROOTED}" << std::endl;
+@@ -523,6 +531,11 @@ void AleArguments::checkValid() const {
+     Logger::info << "\nError: --speciation-gamma-categories can only take "
+                  << "values >= 1" << std::endl;
+   }
++  if (fixedPointIterations < 1) {
++    ok = false;
++    Logger::info << "\nError: --fixed-point-iterations can only take "
++                 << "values >= 1" << std::endl;
++  }
+   // reldating block
+   if (transferConstraint != TransferConstaint::RELDATED &&
+       inferSpeciationOrders) {
+diff --git a/src/ale/AleArguments.hpp b/src/ale/AleArguments.hpp
+index e228c02..55cfaa0 100644
+--- a/src/ale/AleArguments.hpp
++++ b/src/ale/AleArguments.hpp
+@@ -80,6 +80,7 @@ public:
+   std::string optimizationClassFile;
+   unsigned int gammaCategories;
+   RecOpt recOpt;
++  int fixedPointIterations;
+   bool fixRates;
+   bool skipThoroughRates;
+ 
+diff --git a/src/ale/UndatedDLMultiModel.hpp b/src/ale/UndatedDLMultiModel.hpp
+index 8e6edca..f653f15 100644
+--- a/src/ale/UndatedDLMultiModel.hpp
++++ b/src/ale/UndatedDLMultiModel.hpp
+@@ -206,7 +206,7 @@ void UndatedDLMultiModel<REAL>::recomputeSpeciesProbabilities() {
+   std::fill(_uE.begin(), _uE.end(), REAL());
+   // iterate several times to resolve _uE probas with
+   // fixed point optimization
+-  unsigned int maxIt = 4;
++  unsigned int maxIt = this->_info.fixedPointIterations;
+   for (unsigned int it = 0; it < maxIt; ++it) {
+     for (unsigned int c = 0; c < _gammaCatNumber; ++c) {
+       // postorder species tree traversal is granted
+diff --git a/src/ale/UndatedDTLMultiModel.hpp b/src/ale/UndatedDTLMultiModel.hpp
+index 9457d77..4398bae 100644
+--- a/src/ale/UndatedDTLMultiModel.hpp
++++ b/src/ale/UndatedDTLMultiModel.hpp
+@@ -209,7 +209,7 @@ template <class REAL> void UndatedDTLMultiModel<REAL>::updateCLV(CID cid) {
+   std::fill(tq.begin(), tq.end(), REAL());
+   // iterate several times to resolve the DL and TL terms with
+   // fixed point optimization: not needed if we don't model TL
+-  unsigned int maxIt = this->_info.noTL ? 1 : 4;
++  unsigned int maxIt = this->_info.noTL ? 1 : this->_info.fixedPointIterations;
+   for (unsigned int it = 0; it < maxIt; ++it) {
+     bool ok;
+     for (unsigned int c = 0; c < _gammaCatNumber; ++c) {
+@@ -377,7 +377,7 @@ void UndatedDTLMultiModel<REAL>::recomputeSpeciesProbabilities() {
+   std::fill(_tE.begin(), _tE.end(), REAL());
+   // iterate several times to resolve _uE and _tE probas with
+   // fixed point optimization
+-  unsigned int maxIt = 4;
++  unsigned int maxIt = this->_info.fixedPointIterations;
+   for (unsigned int it = 0; it < maxIt; ++it) {
+     for (unsigned int c = 0; c < _gammaCatNumber; ++c) {
+       REAL extinctionSum = REAL();
+diff --git a/src/ale/ale.cpp b/src/ale/ale.cpp
+index f18f77d..5dcb5a6 100644
+--- a/src/ale/ale.cpp
++++ b/src/ale/ale.cpp
+@@ -371,7 +371,7 @@ void checkCCPAndSpeciesTree(const Families &families,
+ }
+ 
+ RecModelInfo buildRecModelInfo(const AleArguments &args) {
+-  return RecModelInfo(
++  RecModelInfo info(
+       ArgumentsHelper::strToRecModel(args.reconciliationModelStr), args.recOpt,
+       (args.modelParametrization ==
+        ModelParametrization::PER_FAMILY), // per family rates
+@@ -382,6 +382,9 @@ RecModelInfo buildRecModelInfo(const AleArguments &args) {
+       -1.0,  // branch length threshold
+       args.transferConstraint, args.noDup, args.noDL, args.noTL,
+       args.fractionMissingFile, args.memorySavings);
++  info.fixedPointIterations =
++      static_cast<unsigned int>(args.fixedPointIterations);
++  return info;
+ }
+ 
+ Parameters buildStartingRates(const AleArguments &args,
+diff --git a/ext/GeneRaxCore/src/util/RecModelInfo.hpp b/ext/GeneRaxCore/src/util/RecModelInfo.hpp
+index 075c49e..8927760 100644
+--- a/ext/GeneRaxCore/src/util/RecModelInfo.hpp
++++ b/ext/GeneRaxCore/src/util/RecModelInfo.hpp
+@@ -47,6 +47,9 @@ struct RecModelInfo {
+   // use less RAM, but likelihood evaluation might be slower
+   // (specific to AleRax)
+   bool memorySavings;
++  // number of fixed-point passes used to solve the extinction probabilities
++  // and the terms of a clade that depend on the clade itself (DL and DTL models)
++  unsigned int fixedPointIterations;
+ 
+   /**
+    *  Default constructor
+@@ -58,7 +61,8 @@ struct RecModelInfo {
+         rootedGeneTree(true), forceGeneTreeRoot(false), madRooting(false),
+         branchLengthThreshold(-1.0),
+         transferConstraint(TransferConstaint::PARENTS), noDup(false),
+-        noDL(false), noTL(false), memorySavings(false) {}
++        noDL(false), noTL(false), memorySavings(false),
++        fixedPointIterations(4) {}
+ 
+   /**
+    *  Constructor
+@@ -79,7 +83,7 @@ struct RecModelInfo {
+         branchLengthThreshold(branchLengthThreshold),
+         transferConstraint(transferConstraint), noDup(noDup), noDL(noDL),
+         noTL(noTL), fractionMissingFile(fractionMissingFile),
+-        memorySavings(memorySavings) {}
++        memorySavings(memorySavings), fixedPointIterations(4) {}
+ 
+   void readFromArgv(char **argv, int &i) {
+     model = RecModel(atoi(argv[i++]));
+@@ -101,6 +105,7 @@ struct RecModelInfo {
+       fractionMissingFile = std::string();
+     }
+     memorySavings = bool(atoi(argv[i++]));
++    fixedPointIterations = atoi(argv[i++]);
+   }
+ 
+   std::vector<std::string> getArgv() const {
+@@ -126,10 +131,11 @@ struct RecModelInfo {
+       argv.push_back(std::string("NONE"));
+     }
+     argv.push_back(std::to_string(static_cast<int>(memorySavings)));
++    argv.push_back(std::to_string(fixedPointIterations));
+     return argv;
+   }
+ 
+-  static int getArgc() { return 15; }
++  static int getArgc() { return 16; }
+ 
+   std::vector<char> getParamTypes() const {
+     std::vector<char> res;

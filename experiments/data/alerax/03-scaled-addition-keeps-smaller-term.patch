@@ -1,0 +1,41 @@
+--- a/ext/GeneRaxCore/src/maths/ScaledValue.hpp
++++ b/ext/GeneRaxCore/src/maths/ScaledValue.hpp
+@@ -65,23 +65,28 @@
+   inline ScaledValue operator+(const ScaledValue &v) const {
+     if (v.scaler == scaler) {
+       return ScaledValue(v.value + value, scaler);
+-    } else if (v.scaler < scaler) {
+-      return v;
+-    } else {
+-      return *this;
+     }
++    // The two terms are in different buckets: bring the smaller one into the
++    // bucket of the larger one and add it, instead of dropping it. Dropping it
++    // loses up to half of the sum when the two terms are close in value but sit
++    // on either side of a bucket boundary.
++    const ScaledValue &big = (v.scaler < scaler) ? v : *this;
++    const ScaledValue &small = (v.scaler < scaler) ? *this : v;
++    if (small.scaler == NULL_SCALER) {
++      return big;
++    }
++    double s = small.value;
++    for (int d = small.scaler - big.scaler; d > 0 && s != 0.0; --d) {
++      s *= JS_SCALE_THRESHOLD;
++    }
++    return ScaledValue(big.value + s, big.scaler);
+   }
+ 
+   /**
+    *  ScaledValue sum operator
+    */
+   inline ScaledValue &operator+=(const ScaledValue &v) {
+-    if (v.scaler == scaler) {
+-      value += v.value;
+-    } else if (v.scaler < scaler) {
+-      value = v.value;
+-      scaler = v.scaler;
+-    }
++    *this = *this + v;
+     return *this;
+   }
+ 
