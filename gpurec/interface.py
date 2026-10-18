@@ -37,11 +37,6 @@ class FitResult:
             for name, row in zip(self.data.names, values)
         }
 
-    def sample_reconciliations(self, n: int, seed: int) -> dict:
-        from gpurec.reconciliation.sampling import sample_family_reconciliations
-
-        return sample_family_reconciliations(self.model, self.data, n, seed)
-
 
 def _log2_rates(rates) -> torch.Tensor:
     values = [float(value) for value in rates]

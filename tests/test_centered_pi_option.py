@@ -165,21 +165,11 @@ def test_backtracking_reconstructs_selected_family(monkeypatch):
             torch.zeros(2),
         )
 
-    captured = {}
-
-    class FakeNative:
-        @staticmethod
-        def sample_reconciliations_torch(*args):
-            captured["args"] = args
-            return {"sample": "ok"}
-
     monkeypatch.setattr(backtracking_input, "solve_resident_e_pi", fake_solve)
-    monkeypatch.setattr(backtracking_input, "_load_native_module", lambda: FakeNative())
 
-    assert backtracking_input.sample_reconciliations(model, family_index=1, seed=0) == {
-        "sample": "ok"
-    }
-    native_args = captured["args"]
+    native_args = backtracking_input.family_sampler_arguments(
+        model, static, backtracking_input.batch_forward(model, static), 1
+    )
     assert native_args[5].tolist() == [[110.0, 111.0], [220.0, 221.0]]
     assert native_args[6].tolist() == [[-110.0, -111.0], [-220.0, -221.0]]
 

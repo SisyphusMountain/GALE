@@ -76,7 +76,7 @@ def _build_model(tmp_path):
 
 
 def _family_arrays(model, family_index=0):
-    """Mirror ``sample_reconciliations``'s setup (input.py) but return the raw
+    """Mirror the sampler's setup (input.py: ``batch_forward``, ``family_sampler_arguments``) but return the raw
     arrays once, so many native-module calls can reuse them instead of re-running
     the forward solve per draw."""
     family = model.families[family_index]

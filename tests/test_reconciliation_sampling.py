@@ -22,8 +22,10 @@ def result(monkeypatch):
 
 
 def test_every_gene_appears_once_in_its_species(result):
-    samples = result.sample_reconciliations(n=5, seed=3)
-    assert list(samples) == list(result.data.names)
+    from gpurec.reconciliation.sampling import iter_family_reconciliations
+
+    samples = dict(iter_family_reconciliations(result.model, result.data, 5, 3))
+    assert sorted(samples) == sorted(result.data.names)
     species_names = result.data.species.names
     for name, trees in samples.items():
         family = result.data.families[result.data.names.index(name)]
@@ -38,7 +40,10 @@ def test_every_gene_appears_once_in_its_species(result):
 
 
 def test_samples_are_reproducible(result):
-    assert result.sample_reconciliations(n=3, seed=7) == result.sample_reconciliations(n=3, seed=7)
+    from gpurec.reconciliation.sampling import iter_family_reconciliations
+
+    first = dict(iter_family_reconciliations(result.model, result.data, 3, 7))
+    assert first == dict(iter_family_reconciliations(result.model, result.data, 3, 7))
 
 
 def test_seed_depends_on_family_and_index():
@@ -48,7 +53,7 @@ def test_seed_depends_on_family_and_index():
     assert len(seeds) == 6
 
 
-def test_family_by_family_samples_equal_the_whole_dictionary(result):
+def test_family_by_family_samples_cover_every_family(result):
     import inspect
 
     from gpurec.reconciliation.sampling import iter_family_reconciliations
@@ -57,7 +62,6 @@ def test_family_by_family_samples_equal_the_whole_dictionary(result):
     assert inspect.isgenerator(families)
     streamed = dict(families)
     assert sorted(streamed) == sorted(result.data.names)
-    assert streamed == result.sample_reconciliations(n=3, seed=11)
 
 
 def test_recphyloxml_events_match_the_event_counts_of_the_same_sample(monkeypatch):
@@ -70,6 +74,7 @@ def test_recphyloxml_events_match_the_event_counts_of_the_same_sample(monkeypatc
         pytest.skip("needs a CUDA GPU")
     from gpurec import evaluate, load_families, load_fit_config
     from gpurec.reconciliation.files import event_counts_text, recphyloxml_text
+    from gpurec.reconciliation.sampling import iter_family_reconciliations
 
     monkeypatch.chdir(RELEASE)
     data = load_families(
@@ -79,7 +84,7 @@ def test_recphyloxml_events_match_the_event_counts_of_the_same_sample(monkeypatc
     result = evaluate(data, parametrization="global", rates=(0.3, 0.3, 0.3), config=load_fit_config(None))
     namespace = "{http://www.recg.org}"
     seen = {"D": 0, "T": 0, "SL": 0, "TL": 0}
-    for name, trees in result.sample_reconciliations(n=20, seed=1).items():
+    for name, trees in iter_family_reconciliations(result.model, data, 20, 1):
         family = data.families[data.names.index(name)]
         assert len(trees) == 20
         for tree in trees:

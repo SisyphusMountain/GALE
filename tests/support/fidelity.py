@@ -45,6 +45,7 @@ def reconcile_at_alerax_rates(species, genes, rates, *, device="cuda", dtype=Non
                               mode="global", solver_options=None, config=None) -> dict:
     """rates: AleraxRates/(D, L, T) in AleRax order. Returns {family: logL_nats}."""
     import torch
+    from gpurec.api._execution import stream_batches
     from gpurec.api.model import GeneReconModel
     from tests.support.alerax_readers import norm_family_name
 
@@ -60,6 +61,9 @@ def reconcile_at_alerax_rates(species, genes, rates, *, device="cuda", dtype=Non
             model.theta.copy_(triple)
         else:
             model.theta.copy_(triple.expand_as(model.theta))
-        loss_bits = float(model())
+        loss_bits = float(stream_batches(
+            model.batch_statics, model.theta, model.receiver_weights, model.origination_weights,
+            genewise=model.genewise, need_grad=False,
+        )[0])
     fam = norm_family_name(gene_list[0])
     return {fam: -loss_bits * math.log(2.0)}

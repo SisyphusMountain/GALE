@@ -1,5 +1,6 @@
 import torch, pytest
 pytestmark = pytest.mark.gpu
+from gpurec.api._execution import stream_batches
 from gpurec.api.model import GeneReconModel
 from gpurec.config import GpurecConfig
 
@@ -11,19 +12,26 @@ def _build(tmp_path, mode, fm):
                           dtype=torch.float64, fraction_missing=fm, clade_budget=GpurecConfig().batching.clade_budget)
 
 
+def _loss_and_grad(m, need_grad):
+    loss, grad, _, _ = stream_batches(
+        m.batch_statics, m.theta, m.receiver_weights, m.origination_weights,
+        genewise=m.genewise, need_grad=need_grad,
+    )
+    return loss, grad
+
+
 @pytest.mark.parametrize("mode", ["global", "specieswise"])
 def test_grad_matches_central_fd_with_fraction_missing(tmp_path, mode):
     m = _build(tmp_path, mode, 0.3)
-    loss = m(); loss.backward()
-    g = m.theta.grad.detach().clone()
+    g = _loss_and_grad(m, True)[1].clone()
     eps = 1e-5
     max_rel = 0.0
     with torch.no_grad():
         flat = m.theta.view(-1)
         for i in range(flat.numel()):
             base = flat[i].item()
-            flat[i] = base + eps; fp = float(m().item())
-            flat[i] = base - eps; fmv = float(m().item())
+            flat[i] = base + eps; fp = float(_loss_and_grad(m, False)[0].item())
+            flat[i] = base - eps; fmv = float(_loss_and_grad(m, False)[0].item())
             flat[i] = base
             fd = (fp - fmv) / (2 * eps)
             ga = float(g.view(-1)[i])

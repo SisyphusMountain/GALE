@@ -47,58 +47,6 @@ Because `gpurec`'s command line accepts
 subset described below) and writes the same output files, an AleRax command
 line works after replacing the program name `alerax` by `gpurec`.
 
-## Quick start, Python
-
-```python
-"""The same run as run_cli.sh, from Python (run from this folder)."""
-from pathlib import Path
-
-import gpurec
-
-data = gpurec.load_families(
-    families=Path("families.txt"),
-    species_tree=Path("species.nwk"),
-    min_covered_species=4,
-    trim_ratio=0.0,
-    max_clade_split_ratio=None,
-    fraction_missing=None,
-    skip_family_filtering=False,
-)
-result = gpurec.fit(data, parametrization="global", start_rates=(0.1, 0.1, 0.1), config=gpurec.load_fit_config(None))
-print("rates:", result.rates)
-print("log-likelihoods:", result.log_likelihoods)
-samples = result.sample_reconciliations(n=10, seed=42)
-gpurec.write_alerax(result, samples, Path("output_python"))
-```
-
-See `examples/quickstart/run_python.py`.
-
-`result.model` is the underlying `torch.nn.Module` (a `GeneReconModel`); it
-can be used directly in a custom PyTorch optimization loop instead of
-`gpurec.fit`. Its `theta` parameter holds log-base-2 rates, one row `(D, L,
-T)` per family, and calling the model returns the negative log-likelihood
-**in bits** (not the natural-log likelihood that `result.log_likelihoods`
-reports — the two differ by a factor of `log(2)`):
-
-```python
-import math
-import torch
-
-# evaluate (not fit) starting rates, to get a model no gpurec optimizer has touched yet:
-result = gpurec.evaluate(data, parametrization="global", rates=(0.1, 0.1, 0.1), config=gpurec.load_fit_config(None))
-model = result.model  # a torch.nn.Module; model.theta has shape (n_families, 3)
-optimizer = torch.optim.Adam([model.theta], lr=0.05)
-for step in range(50):
-    optimizer.zero_grad()
-    loss_bits = model()  # negative log-likelihood, summed over families, in bits
-    loss_bits.backward()
-    optimizer.step()
-    # keep the rates inside the same box gpurec's own fitting uses ([1e-6, 2.0]):
-    gpurec.clamp_log_rate_(model.theta, min_rate=1e-6, max_rate=2.0)
-with torch.no_grad():
-    log_likelihood_nats = -float(model()) * math.log(2.0)
-```
-
 ## Supported AleRax options
 
 `gpurec`'s command line accepts a subset of

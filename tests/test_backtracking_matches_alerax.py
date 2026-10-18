@@ -14,7 +14,7 @@ trees itself (not just report a likelihood), and its output includes, per sample
 which species branch the gene family's history STARTS at (the ``origination``
 column in ``family_0_speciesEventCounts_<k>.txt``). That's exactly what gpurec
 calls the "root species" -- the species ``sample_root_species``/the first node of
-``sample_reconciliations`` draws, weighted by ``Pi(root_clade, .)``.
+a sample of the native ``sample_reconciliations_many`` draws, weighted by ``Pi(root_clade, .)``.
 
 Gene tree rooting -- do NOT pass ``--gene-tree-rooting ROOTED``
 -----------------------------------------------------------------
@@ -114,11 +114,11 @@ def _run_alerax_origination(workdir, out_name):
 
 def _run_gpurec_origination(sp_path, g_path, fraction_missing):
     """Sample _N_SAMPLES reconciliations with gpurec's own backtracking sampler
-    (the real public entry point); return a Counter of the root species."""
+    (``sample_reconciliations_many``, which the command line uses); return a Counter of the root species."""
     import torch
 
     from gpurec.api.model import GeneReconModel
-    from gpurec.core.backtracking.input import sample_reconciliations
+    from gpurec.core.backtracking.input import _load_native_module, batch_forward, family_sampler_arguments
     from gpurec.core.scheduling.batching import species_name_to_index
 
     model = GeneReconModel(
@@ -131,9 +131,10 @@ def _run_gpurec_origination(sp_path, g_path, fraction_missing):
         )
     idx_to_name = {v: k for k, v in species_name_to_index(str(sp_path)).items()}
 
+    static = model.batch_statics[0]
+    arguments = family_sampler_arguments(model, static, batch_forward(model, static), 0)
     counts = collections.Counter()
-    for seed in range(_N_SAMPLES):
-        nodes = sample_reconciliations(model, family_index=0, seed=seed)
+    for nodes in _load_native_module().sample_reconciliations_many(*arguments, list(range(_N_SAMPLES))):
         counts[idx_to_name[nodes[0][1]]] += 1
     return counts
 

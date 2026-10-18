@@ -2,6 +2,9 @@ import torch, pytest
 
 pytestmark = pytest.mark.gpu
 
+import dataclasses
+
+from gpurec.api._execution import stream_batches
 from gpurec.api.model import GeneReconModel
 from tests._fraction_missing_oracle import oracle_nll
 from gpurec.config import GpurecConfig
@@ -33,9 +36,11 @@ def test_wave_matches_cpu_oracle(tmp_path):
             torch.log2(torch.tensor([D, L, T], dtype=torch.float64, device=m.theta.device))
         )
     # Tighten the wave solver so it is fully converged for a converged-vs-converged check.
-    m.configure_solver(e_tol=1e-13, e_max_iter=4000, pi_iters=256)
+    m.solver_options = dataclasses.replace(m.solver_options, e_tol=1e-13, e_max_iter=4000, pi_iters=256)
 
-    with torch.no_grad():
-        got = float(m().item())
+    got = float(stream_batches(
+        m.batch_statics, m.theta, m.receiver_weights, m.origination_weights,
+        genewise=m.genewise, need_grad=False,
+    )[0].item())
 
     assert abs(got - ref) < 1e-6, f"wave={got!r} oracle={ref!r} delta={got - ref:.3e}"

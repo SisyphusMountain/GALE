@@ -4,6 +4,7 @@ import pytest
 import torch
 
 from gpurec import GeneReconModel, SolverOptions
+from gpurec.api._execution import stream_batches
 from gpurec.api._implicit_grad import implicit_grad_loglik_vjp_wave
 from gpurec.config import GpurecConfig, PrecisionOptions
 from gpurec.core.inference.solver import (
@@ -263,16 +264,11 @@ def test_native_backward_matches_fp64(
 
 
 def _value_and_grads(model, theta, receiver, origination):
-    theta = theta.detach().clone().requires_grad_(True)
-    receiver = receiver.detach().clone().requires_grad_(True)
-    origination = origination.detach().clone().requires_grad_(True)
-    loss = model(
-        theta=theta,
-        receiver_weights=receiver,
-        origination_weights=origination,
+    loss, *grads = stream_batches(
+        model.batch_statics, theta, receiver, origination, genewise=model.genewise,
+        need_grad=True, need_origination_grad=True,
     )
-    grads = torch.autograd.grad(loss, (theta, receiver, origination))
-    return loss.detach(), tuple(grad.detach() for grad in grads)
+    return loss, tuple(grads)
 
 
 @pytest.mark.gpu
@@ -315,40 +311,3 @@ def test_native_backward_matches_single_streamed_and_fp64(
         torch.testing.assert_close(
             streamed_grad.double(), reference_grad, rtol=5e-5, atol=2e-5
         )
-
-
-@pytest.mark.gpu
-def test_centered_autograd_saves_offsets_from_each_forward(tmp_path: Path) -> None:
-    """A later solve on the same static must not replace an earlier ctx's gauges."""
-    _require_native_cuda()
-    species_tree, gene = _write_split_fanout_example(tmp_path)
-    shared = _model(species_tree, [gene])
-    receiver = torch.linspace(
-        -0.8, 0.7, shared.receiver_weights.numel(), device="cuda"
-    )
-    origination = torch.linspace(
-        0.6, -0.5, shared.origination_weights.numel(), device="cuda"
-    )
-    theta_a = torch.tensor([-1.7, -2.3, -1.1], device="cuda", requires_grad=True)
-    theta_b = torch.tensor([0.4, -4.2, -2.6], device="cuda", requires_grad=True)
-
-    # Both contexts share one mutable batch static. Forward B replaces the
-    # static's current offset sidecar before backward A executes.
-    loss_a = shared(theta=theta_a, receiver_weights=receiver, origination_weights=origination)
-    loss_b = shared(theta=theta_b, receiver_weights=receiver, origination_weights=origination)
-    grad_a, grad_b = torch.autograd.grad(loss_a + loss_b, (theta_a, theta_b))
-
-    references = []
-    for theta in (theta_a.detach(), theta_b.detach()):
-        model = _model(species_tree, [gene])
-        theta_ref = theta.clone().requires_grad_(True)
-        loss_ref = model(
-            theta=theta_ref,
-            receiver_weights=receiver,
-            origination_weights=origination,
-        )
-        (gradient_ref,) = torch.autograd.grad(loss_ref, theta_ref)
-        references.append(gradient_ref)
-
-    torch.testing.assert_close(grad_a, references[0], rtol=2e-5, atol=2e-6)
-    torch.testing.assert_close(grad_b, references[1], rtol=2e-5, atol=2e-6)

@@ -3,7 +3,8 @@ from pathlib import Path
 import pytest
 import torch
 
-from gpurec import GeneReconModel, SolverOptions, sample_reconciliations
+from gpurec import GeneReconModel, SolverOptions
+from gpurec.api._execution import stream_batches
 from gpurec.core.backtracking import input as backtracking_input
 from gpurec.core.inference.logspace import logsumexp2
 from gpurec.core.parameters.extract_parameters import (
@@ -295,35 +296,6 @@ def test_gene_recon_model_constructs_for_public_modes(
     assert model.family_batches == [[0]]
     assert model.species_helpers["sp_child1"].device.type == "cuda"
     assert model.wave_layout["perm"].device.type == "cuda"
-    assert model.configure_solver(e_max_iter=5).e_max_iter == 5
-    model.clear_warm_starts()
-
-
-def test_gene_recon_model_forward_and_backward_on_tiny_example(tmp_path: Path) -> None:
-    _require_preprocess_native()
-    device = _require_cuda_triton()
-    species_tree, gene_trees = _write_tiny_example(tmp_path)
-    model = GeneReconModel(
-        species_tree,
-        gene_trees,
-        family_chunk_size=1,
-        clade_budget=None,
-        batch_packing="sequential",
-        max_wave_size=4,
-        solver_options=_solver_options(),
-    )
-
-    loss = model()
-    assert loss.ndim == 0
-    assert torch.isfinite(loss).item()
-
-    loss.backward()
-    assert model.theta.grad is not None
-    assert model.theta.grad.shape == model.theta.shape
-    assert torch.isfinite(model.theta.grad).all().item()
-    assert model.receiver_weights.grad is not None
-    assert model.receiver_weights.grad.shape == model.receiver_weights.shape
-    assert torch.isfinite(model.receiver_weights.grad).all().item()
 
 
 @pytest.mark.gpu
@@ -385,10 +357,17 @@ def test_non_uniform_receiver_logits_change_likelihood(tmp_path: Path) -> None:
     with torch.no_grad():
         model.theta.copy_(torch.tensor([0.0, 0.0, 5.0], device=device))
 
-    uniform_loss = model().detach()
-    model.clear_warm_starts()
+    uniform_loss = stream_batches(
+        model.batch_statics, model.theta, model.receiver_weights, model.origination_weights,
+        genewise=model.genewise, need_grad=False,
+    )[0]
+    for static in model.batch_statics:  # the biased solve starts cold, as the uniform one did
+        static.warm_E = None
     biased = torch.tensor([4.0, -4.0, 0.0], device=device)
-    biased_loss = model(receiver_weights=biased).detach()
+    biased_loss = stream_batches(
+        model.batch_statics, model.theta, biased, model.origination_weights,
+        genewise=model.genewise, need_grad=False,
+    )[0]
 
     assert torch.isfinite(biased_loss).item()
     assert not torch.allclose(uniform_loss, biased_loss, atol=1e-6, rtol=1e-6)
@@ -422,13 +401,17 @@ def test_receiver_gradients_accumulate_across_batches(tmp_path: Path) -> None:
         single.theta.copy_(model.theta)
         single.receiver_weights.copy_(model.receiver_weights)
 
-    model().backward()
-    single().backward()
+    model_receiver_grad = stream_batches(
+        model.batch_statics, model.theta, model.receiver_weights, model.origination_weights,
+        genewise=model.genewise, need_grad=True,
+    )[2]
+    single_receiver_grad = stream_batches(
+        single.batch_statics, single.theta, single.receiver_weights, single.origination_weights,
+        genewise=single.genewise, need_grad=True,
+    )[2]
 
-    assert model.receiver_weights.grad is not None
-    assert single.receiver_weights.grad is not None
-    assert torch.isfinite(model.receiver_weights.grad).all().item()
-    assert torch.allclose(model.receiver_weights.grad, 2.0 * single.receiver_weights.grad, atol=1e-6, rtol=1e-5)
+    assert torch.isfinite(model_receiver_grad).all().item()
+    assert torch.allclose(model_receiver_grad, 2.0 * single_receiver_grad, atol=1e-6, rtol=1e-5)
 
 
 def test_sample_reconciliations_on_tiny_example(tmp_path: Path) -> None:
@@ -446,7 +429,11 @@ def test_sample_reconciliations_on_tiny_example(tmp_path: Path) -> None:
         solver_options=_solver_options(),
     )
 
-    sample = sample_reconciliations(model, family_index=0, seed=1)
+    static = model.batch_statics[0]
+    arguments = backtracking_input.family_sampler_arguments(
+        model, static, backtracking_input.batch_forward(model, static), 0
+    )
+    sample = backtracking_input._load_native_module().sample_reconciliations_many(*arguments, [1])[0]
 
     assert isinstance(sample, list)
     assert sample[0][0] == "speciation"

@@ -5,6 +5,7 @@ import pytest
 import torch
 
 from gpurec import GeneReconModel, SolverOptions
+from gpurec.api._execution import stream_batches
 from gpurec.api._execution import evaluate_static_convergence
 from gpurec.core.inference.forward import pi_wave_forward
 from gpurec.core.inference.solver import solve_forward_residual, solve_resident_e_pi
@@ -799,15 +800,11 @@ def test_pi_forward_matches_fp64_for_receiver_and_origination_cases(
         neumann_terms=16,
     )
     def loss_and_grads(model, receiver, origination):
-        theta = model.theta.detach().clone().requires_grad_(True)
-        receiver = receiver.detach().clone().requires_grad_(True)
-        origination = origination.detach().clone().requires_grad_(True)
-        loss = model(
-            theta=theta,
-            receiver_weights=receiver,
-            origination_weights=origination,
+        loss, *grads = stream_batches(
+            model.batch_statics, model.theta.detach(), receiver, origination, genewise=model.genewise,
+            need_grad=True, need_origination_grad=True,
         )
-        return loss, torch.autograd.grad(loss, (theta, receiver, origination))
+        return loss, grads
 
     loss32, grads32 = loss_and_grads(model32, receiver32, origination32)
     loss64, grads64 = loss_and_grads(model64, receiver64, origination64)
@@ -880,7 +877,10 @@ def test_pi_forward_streams_batches_without_losing_fp64_loss(tmp_path: Path) -> 
         max_wave_size=8,
         solver_options=options,
     )
-    single_loss = single().detach()
+    single_loss = stream_batches(
+        single.batch_statics, single.theta, single.receiver_weights, single.origination_weights,
+        genewise=single.genewise, need_grad=False,
+    )[0]
 
     streamed = GeneReconModel(
         species_tree,
@@ -891,7 +891,9 @@ def test_pi_forward_streams_batches_without_losing_fp64_loss(tmp_path: Path) -> 
         max_wave_size=8,
         solver_options=options,
     )
-    with torch.no_grad():
-        streamed_loss = streamed()
+    streamed_loss = stream_batches(
+        streamed.batch_statics, streamed.theta, streamed.receiver_weights, streamed.origination_weights,
+        genewise=streamed.genewise, need_grad=False,
+    )[0]
     assert streamed_loss.dtype == torch.float64
     torch.testing.assert_close(streamed_loss, 2.0 * single_loss, rtol=0.0, atol=1e-5)

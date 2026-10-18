@@ -93,16 +93,3 @@ def family_sampler_arguments(model, static, forward: dict, local_family_index: i
         _numpy(species_helpers["sp_subtree_start"], torch.int64),
         _numpy(species_helpers["sp_subtree_end"], torch.int64),
     )
-
-
-def _find_batch(model, family_index: int):
-    for static in model.batch_statics:
-        if family_index in static.family_indices:
-            return static, static.family_indices.index(family_index)
-    raise IndexError(f"family index {family_index} is not in any batch")
-
-
-def sample_reconciliations(model, *, family_index: int, seed: int):
-    static, local_family_index = _find_batch(model, family_index)
-    arguments = family_sampler_arguments(model, static, batch_forward(model, static), local_family_index)
-    return _load_native_module().sample_reconciliations_torch(*arguments, seed)

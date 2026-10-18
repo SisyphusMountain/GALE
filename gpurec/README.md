@@ -15,8 +15,8 @@ helpers, and Triton kernels.
   `"per-family"`), returning a `FitResult`.
 - `evaluate`: compute likelihoods at given rates, no fitting; same return
   type as `fit`.
-- `FitResult`: `.rates`, `.log_likelihoods` (natural log), `.model` (the
-  gene-wise `GeneReconModel`), and `.sample_reconciliations(n, seed)`.
+- `FitResult`: `.rates`, `.log_likelihoods` (natural log) and `.model` (the
+  gene-wise `GeneReconModel`).
 - `write_alerax`: write a `FitResult` (and, optionally, its sampled
   reconciliations) to AleRax-format output files.
 - `load_fit_config`, `load_config`: read a `GpurecConfig` from an optional
@@ -29,19 +29,13 @@ helpers, and Triton kernels.
   likelihoods (and their gradients) on the GPU.
 - `SolverOptions`: mutable solver controls for the fixed-point and
   implicit-gradient solves.
-- `sample_reconciliations`: low-level, single-family, single-sample
-  backtracking helper exposed from the Rust `gpurec-backtrack` extension
-  (see `gpurec/core/backtracking/README.md`); `FitResult.sample_reconciliations`
-  is the higher-level, many-families/many-samples entry point most callers
-  want.
 - `ReconciledGeneTree`: one sampled reconciliation, with per-node gene name
   (leaves), species label and event; used by the RecPhyloXML/Newick/counts
   writers.
 - `cuda_device`: checks that a CUDA GPU is available and returns it, or
   raises a clear error.
 - `log2_rate_bounds`, `project_rate_gradient_`, `clamp_log_rate_`: rate-box
-  helpers for a custom PyTorch optimization loop over `GeneReconModel.theta`
-  (log-base-2 rates).
+  helpers used by the fitting recipes (log-base-2 rates).
 
 ## File And Folder Roles
 

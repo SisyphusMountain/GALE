@@ -227,29 +227,24 @@ def test_python_warnings_go_to_the_log(tmp_path, monkeypatch):
 
 @pytest.mark.gpu
 def test_command_line_writes_samples_family_by_family(tmp_path, monkeypatch):
-    """The command line never holds every family's samples at once; its files match the Python path's."""
+    """The command line writes samples family by family; its files match those written from one dictionary of every family's samples."""
     if not torch.cuda.is_available():
         pytest.skip("needs a CUDA GPU")
     from gpurec import evaluate, load_families, load_fit_config, write_alerax
     from gpurec.cli.main import main
-    from gpurec.interface import FitResult
+    from gpurec.reconciliation.sampling import iter_family_reconciliations
 
     _copy_dataset(tmp_path)
     monkeypatch.chdir(tmp_path)
 
-    def whole_dictionary(self, n, seed):
-        raise AssertionError("the command line must not build the dictionary of every family's samples")
-
-    with monkeypatch.context() as patch:
-        patch.setattr(FitResult, "sample_reconciliations", whole_dictionary)
-        assert main(["-f", "families.txt", "-s", "species.nwk", "-p", "out", "--fix-rates", "-g", "3", "--seed", "5"]) == 0
+    assert main(["-f", "families.txt", "-s", "species.nwk", "-p", "out", "--fix-rates", "-g", "3", "--seed", "5"]) == 0
 
     data = load_families(
         families=Path("families.txt"), species_tree=Path("species.nwk"), min_covered_species=4,
         trim_ratio=0.0, max_clade_split_ratio=None, fraction_missing=None, skip_family_filtering=False,
     )
     result = evaluate(data, parametrization="global", rates=(0.1, 0.1, 0.1), config=load_fit_config(None))
-    write_alerax(result, result.sample_reconciliations(n=3, seed=5), tmp_path / "python")
+    write_alerax(result, dict(iter_family_reconciliations(result.model, result.data, 3, 5)), tmp_path / "python")
     cli, python = tmp_path / "out" / "reconciliations", tmp_path / "python" / "reconciliations"
     per_family = sorted(str(p.relative_to(python)) for p in python.rglob("*") if p.is_file() and p.parent != python)
     assert per_family == sorted(str(p.relative_to(cli)) for p in cli.rglob("*") if p.is_file() and p.parent != cli)

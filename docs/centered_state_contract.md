@@ -140,7 +140,7 @@ gates pass.
 |---|---|---|
 | forward Pi/Pibar | `core/kernels/pi_forward.py`, `core/inference/forward.py` | native residual+offset producer; accumulator-dtype root reconstruction |
 | split reduction | `core/kernels/pi_forward.py` | native DTS residual+offset producer, including one and multiple splits |
-| likelihood/streaming | `core/inference/solver.py`, `api/_execution.py`, `api/_autograd.py` | preserve the accumulator-dtype scalar across batches and save the matching offsets |
+| likelihood/streaming | `core/inference/solver.py`, `api/_execution.py` | preserve the accumulator-dtype scalar across batches and save the matching offsets |
 | first-order adjoint | `core/kernels/wave_backward*.py`, `api/_implicit_grad.py` | offset-aware wave and cross-DTS ratios; the same canonical path in fp64/fp64 is the oracle |
 | convergence diagnostics | `core/inference/solver.py`, `api/_execution.py` | compare represented absolute iterates or frame-aligned residuals |
 | backtracking | `core/backtracking/*` | never serialize or replay a residual without its offsets; the native host ABI still requires f64 arrays at its boundary |

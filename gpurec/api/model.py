@@ -4,13 +4,8 @@ from dataclasses import replace as _replace_dataclass
 
 import torch
 
-from gpurec.api._autograd import _GeneReconFullLossFunction, _GeneReconFunction
 from gpurec.api._batch_state import _BatchStatic, build_batch_static
-from gpurec.api._execution import (
-    stream_batches,
-    stream_genewise_loss_vector_grad,
-    theta_for_static,
-)
+from gpurec.api._execution import stream_genewise_loss_vector_grad, theta_for_static
 from gpurec.api.solver_options import SolverOptions
 from gpurec.config import GpurecConfig, PrecisionOptions, torch_dtype_name
 from gpurec.config.rates import RateBounds
@@ -23,7 +18,6 @@ _MODE_FLAGS = {
     "specieswise": (False, True),
     "genewise": (True, False),
 }
-_UNSET = object()
 
 
 def _mode_flags(mode: str) -> tuple[bool, bool]:
@@ -272,40 +266,8 @@ class GeneReconModel(torch.nn.Module):
         for static in getattr(self, "batch_statics", []):
             static.solver_options = options
 
-    def configure_solver(self, **kwargs) -> SolverOptions:
-        for name, value in kwargs.items():
-            if not hasattr(self.solver_options, name):
-                raise AttributeError(f"unknown solver option {name!r}")
-            setattr(self.solver_options, name, value)
-        self.solver_options.validate()
-        return self.solver_options
-
-    def clear_warm_starts(self) -> None:
-        for static in self.batch_statics:
-            static.warm_E = None
-        self.warm_E = None
-
     def _theta_for_static(self, static: _BatchStatic, theta: torch.Tensor) -> torch.Tensor:
         return theta_for_static(static, theta, genewise=self.genewise)
-
-    def _stream_batches(
-        self,
-        theta: torch.Tensor,
-        receiver_weights: torch.Tensor,
-        origination_weights: torch.Tensor,
-        *,
-        need_grad: bool,
-        need_origination_grad: bool = False,
-    ):
-        return stream_batches(
-            self.batch_statics,
-            theta,
-            receiver_weights,
-            origination_weights,
-            genewise=self.genewise,
-            need_grad=need_grad,
-            need_origination_grad=need_origination_grad,
-        )
 
     def genewise_loss_vector_and_grad(
         self,
@@ -352,124 +314,3 @@ class GeneReconModel(torch.nn.Module):
             update_warm_starts=update_warm_starts,
         )
         return loss_vec
-
-    def replan_batches(
-        self,
-        *,
-        family_chunk_size=_UNSET,
-        clade_budget=_UNSET,
-        batch_packing=_UNSET,
-        max_wave_size=_UNSET,
-        family_group_assignments=None,
-    ):
-        self.family_chunk_size = self.family_chunk_size if family_chunk_size is _UNSET else family_chunk_size
-        self.clade_budget = self.clade_budget if clade_budget is _UNSET else clade_budget
-        self.batch_packing = self.batch_packing if batch_packing is _UNSET else batch_packing
-        self.max_wave_size = self.max_wave_size if max_wave_size is _UNSET else max_wave_size
-        # Remember the active grouping so set_batch_solver_options() can recover each batch's label.
-        self.family_group_assignments = (
-            list(family_group_assignments) if family_group_assignments is not None else None
-        )
-        raw_plan = plan_batch_wave_layouts(
-            self.families,
-            family_chunk_size=self.family_chunk_size,
-            clade_budget=self.clade_budget,
-            batch_packing=self.batch_packing,
-            max_wave_size=self.max_wave_size,
-            family_group_assignments=self.family_group_assignments,
-        )
-        self.family_batches = raw_plan["batches"]
-        self.batch_wave_layouts = raw_plan["batch_wave_layouts"]
-        self.batch_statics = [
-            self._make_batch_static(batch, plan, device=self.theta.device, max_wave_size=self.max_wave_size)
-            for batch, plan in zip(self.family_batches, self.batch_wave_layouts)
-        ]
-        self.wave_layout = self.batch_statics[0].wave_layout
-        self.rate_family_idx = self.batch_statics[0].rate_family_idx
-        self.warm_E = self.batch_statics[0].warm_E
-        self._resolve_warm_adjoint_gate()
-        return self.family_batches
-
-    def set_batch_solver_options(self, per_group_options):
-        """Assign a distinct ``SolverOptions`` to each batch by its group label.
-
-        ``per_group_options`` maps a group label (int) to a ``SolverOptions`` (or a
-        ``dict`` of overrides). Requires a prior ``replan_batches(family_group_assignments=...)``
-        so each batch's label is well defined (every family in a batch shares one label by
-        construction). This sets ``static.solver_options`` per batch directly and does NOT go
-        through the ``solver_options`` setter, which would clobber every batch with one object.
-        """
-        assignments = getattr(self, "family_group_assignments", None)
-        if assignments is None:
-            raise ValueError(
-                "set_batch_solver_options() requires a prior "
-                "replan_batches(family_group_assignments=...)"
-            )
-        for batch, static in zip(self.family_batches, self.batch_statics):
-            label = int(assignments[batch[0]])
-            if label not in per_group_options:
-                raise KeyError(f"no SolverOptions provided for group label {label}")
-            options = per_group_options[label]
-            if isinstance(options, dict):
-                options = SolverOptions(**options)
-            # fresh copy per batch so batches never alias one mutable options object
-            options = _replace_dataclass(options)
-            options.validate()
-            static.solver_options = options
-        return self.batch_statics
-
-    def convergence_report(self, *, pi_iters_high: int = 400, neumann_terms=None):
-        """Per-family solver-convergence diagnostics over all batches.
-
-        Runs a diagnostic forward (at a high ``pi_iters`` so the forward fixed point is
-        converged) + backward self-loop pass per batch, mapping each batch's local
-        per-family results to global family indices. Returns a dict of three
-        ``[n_families]`` tensors: ``forward_resid`` (last Pi update size),
-        ``backward_relres`` (last Neumann increment / partial sum), and ``vk_magnitude``
-        (max adjoint norm — large => non-normal overshoot). ``neumann_terms=None`` measures
-        at each batch's current setting.
-        """
-        from gpurec.api._execution import evaluate_static_convergence
-
-        n = len(self.families)
-        device = self.theta.device
-        forward_resid = torch.zeros(n, device=device, dtype=torch.float32)
-        backward_relres = torch.zeros(n, device=device, dtype=torch.float32)
-        vk_magnitude = torch.zeros(n, device=device, dtype=torch.float32)
-        with torch.no_grad():
-            for static in self.batch_statics:
-                theta_b = theta_for_static(static, self.theta.detach(), genewise=self.genewise)
-                f, b, v = evaluate_static_convergence(
-                    static,
-                    theta_b,
-                    self.receiver_weights.detach(),
-                    pi_iters_high=int(pi_iters_high),
-                    neumann_terms=neumann_terms,
-                )
-                idx = static.family_index_tensor.to(device)
-                forward_resid[idx] = f.to(device)
-                backward_relres[idx] = b.to(device)
-                vk_magnitude[idx] = v.to(device)
-        return {
-            "forward_resid": forward_resid,
-            "backward_relres": backward_relres,
-            "vk_magnitude": vk_magnitude,
-        }
-
-    def forward(
-        self,
-        theta: torch.Tensor | None = None,
-        receiver_weights: torch.Tensor | None = None,
-        origination_weights: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        theta = self.theta if theta is None else theta
-        receiver_weights = self.receiver_weights if receiver_weights is None else receiver_weights
-        origination_weights = self.origination_weights if origination_weights is None else origination_weights
-        if len(self.batch_statics) == 1:
-            return _GeneReconFunction.apply(theta, receiver_weights, origination_weights, self.batch_statics[0])
-        if torch.is_grad_enabled() and (
-            theta.requires_grad or receiver_weights.requires_grad or origination_weights.requires_grad
-        ):
-            return _GeneReconFullLossFunction.apply(theta, receiver_weights, origination_weights, self)
-        loss, _, _, _ = self._stream_batches(theta, receiver_weights, origination_weights, need_grad=False)
-        return loss

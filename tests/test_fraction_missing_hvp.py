@@ -14,7 +14,7 @@ duplication + losses and yields a genuinely rate-dependent NLL whose Hessian fra
 modifies (curvature -1.7e-2 without fm -> -4.0e-2 at fm=0.3).
 
 Gate 1: analytic HVP ``H u`` (real ``make_exact_hvp`` entry point) vs central finite-difference of
-the FIRST-ORDER gradient (``m().backward()`` -- the fraction-missing-correct gradient verified by
+the FIRST-ORDER gradient (``stream_batches`` -- the fraction-missing-correct gradient verified by
 ``test_fraction_missing_grad.py``) along a random unit direction ``u``. Relative L2 error < 1e-2.
 Gate 2: with fraction_missing=0.0 the HVP is bit-identical to the no-fraction-missing HVP (the
 ``USE_FRACTION_MISSING`` constexpr compiles the new code out when ``leaf_fm_log is None``).
@@ -22,6 +22,7 @@ Gate 2: with fraction_missing=0.0 the HVP is bit-identical to the no-fraction-mi
 import torch, pytest
 pytestmark = pytest.mark.gpu
 
+from gpurec.api._execution import stream_batches
 from gpurec.api.model import GeneReconModel
 from gpurec.solver.value_and_grad import forward_solve
 from gpurec.solver.hvp.exact import make_exact_hvp
@@ -42,12 +43,14 @@ def _build(tmp_path, gene, fm, tag):
                           dtype=torch.float64, fraction_missing=fm, clade_budget=GpurecConfig().batching.clade_budget)
 
 
-def _autograd_grad(m, theta):
-    """Production first-order gradient d(NLL)/dtheta via m().backward() -- the fraction-missing-correct
+def _first_order_grad(m, theta):
+    """Production first-order gradient d(NLL)/dtheta (``stream_batches``) -- the fraction-missing-correct
     gradient verified by test_fraction_missing_grad.py; the FD reference (independent of HVP internals)."""
-    tt = theta.detach().clone().requires_grad_(True)
-    m(tt).backward()
-    return tt.grad.reshape(-1).detach().clone()
+    grad = stream_batches(
+        m.batch_statics, theta.detach(), m.receiver_weights, m.origination_weights,
+        genewise=m.genewise, need_grad=True,
+    )[1]
+    return grad.reshape(-1).clone()
 
 
 def _hvp(m, theta):
@@ -68,8 +71,8 @@ def test_hvp_matches_central_fd_of_grad_with_fraction_missing(tmp_path):
 
     eps = 1e-5
     flat = theta0.reshape(-1)
-    gp = _autograd_grad(m, (flat + eps * u).reshape(theta0.shape))
-    gm = _autograd_grad(m, (flat - eps * u).reshape(theta0.shape))
+    gp = _first_order_grad(m, (flat + eps * u).reshape(theta0.shape))
+    gm = _first_order_grad(m, (flat - eps * u).reshape(theta0.shape))
     fd = ((gp - gm) / (2 * eps)).double()
 
     # Guard: the fixture must actually have curvature, else the comparison is vacuous.

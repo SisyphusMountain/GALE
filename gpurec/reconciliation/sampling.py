@@ -6,7 +6,7 @@ import hashlib
 import torch
 
 from gpurec.core.backtracking.input import _load_native_module, batch_forward, family_sampler_arguments
-from gpurec.reconciliation.tree import ReconciledGeneTree, tree_from_sampler_nodes
+from gpurec.reconciliation.tree import tree_from_sampler_nodes
 
 
 def sample_seed(seed: int, family: str, index: int) -> int:
@@ -18,8 +18,7 @@ def sample_seed(seed: int, family: str, index: int) -> int:
 def iter_family_reconciliations(model, data, n: int, seed: int):
     """Yield ``(family name, n sampled reconciliations)`` family by family, one batch in memory at a time.
 
-    Families come in the model's batch order, not in ``data.names`` order. Each family's samples
-    use the same seeds as :func:`sample_family_reconciliations`, so the trees are the same.
+    Families come in the model's batch order, not in ``data.names`` order.
     """
     if n < 0:
         raise ValueError(f"the number of samples must be non-negative, got {n}")
@@ -46,8 +45,3 @@ def iter_family_reconciliations(model, data, n: int, seed: int):
         # ``arguments`` holds views of ``forward``: both go before the caller's code runs.
         del forward, arguments
         yield from batch
-
-
-def sample_family_reconciliations(model, data, n: int, seed: int) -> dict[str, list[ReconciledGeneTree]]:
-    samples = dict(iter_family_reconciliations(model, data, n, seed))
-    return {name: samples[name] for name in data.names}

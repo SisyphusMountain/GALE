@@ -8,7 +8,7 @@ NLL at the *same* rates and fraction-missing values.
 
 Units / sign
 ------------
-gpurec ``model()`` returns an NLL in **bits** (base-2, negative-log-likelihood).
+gpurec's ``stream_batches`` returns an NLL in **bits** (base-2, negative-log-likelihood).
 AleRax ``per_fam_likelihoods.txt`` is a log-likelihood in **nats** (natural log).
 Both models use the identical normalization ``log(sum_e uq[e]) - log(sum_e (1-uE[e]))``
 (uniform origination + survival factor), differing only by the base of the log, so
@@ -130,8 +130,11 @@ def _run_gpurec_nats(sp_path, g_path, fraction_missing):
 
     Converted from gpurec's native NLL-in-bits via ``logL_nats = -nll_bits*ln(2)``.
     """
+    import dataclasses
+
     import torch
 
+    from gpurec.api._execution import stream_batches
     from gpurec.api.model import GeneReconModel
 
     m = GeneReconModel(
@@ -146,9 +149,11 @@ def _run_gpurec_nats(sp_path, g_path, fraction_missing):
             torch.log2(torch.tensor([_D, _L, _T], dtype=torch.float64, device=m.theta.device))
         )
     # Fully converge the wave solver for a converged-vs-converged comparison.
-    m.configure_solver(e_tol=1e-13, e_max_iter=4000, pi_iters=256)
-    with torch.no_grad():
-        nll_bits = float(m().item())
+    m.solver_options = dataclasses.replace(m.solver_options, e_tol=1e-13, e_max_iter=4000, pi_iters=256)
+    nll_bits = float(stream_batches(
+        m.batch_statics, m.theta, m.receiver_weights, m.origination_weights,
+        genewise=m.genewise, need_grad=False,
+    )[0].item())
     return -nll_bits * _LN2
 
 
