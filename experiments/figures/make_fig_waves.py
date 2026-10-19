@@ -29,7 +29,7 @@ batches = {int(r["batch"]): r for r in csv.DictReader(open(folder / "batches_def
 fig, (a, b) = plt.subplots(1, 2, figsize=(10, 3.4))
 bins = np.logspace(0, np.log2(W), 27, base=2)
 for data, lab, col in ((alone, f"each family alone ({len(alone):,} waves)", "tab:orange"),
-                       (default, f"release batches ({len(default):,} waves)", "tab:blue")):
+                       (default, f"default batches ({len(default):,} waves)", "tab:blue")):
     sizes = np.array([c for _, c in data])
     a.hist(sizes, bins=bins, weights=np.full(len(sizes), 100 / len(sizes)), alpha=0.6, color=col, label=lab)
 a.axvline(W, color="k", ls="--", lw=1)
@@ -59,6 +59,6 @@ b.axhline(W, color="k", ls="--", lw=1)
 b.set_xlabel("wave number in the batch")
 b.set_ylabel("clades in the wave")
 b.legend(fontsize=8, loc="center right")
-b.set_title(f"(b) the waves of the {nb} release batches", fontsize=10)
+b.set_title(f"(b) the waves of the {nb} default batches", fontsize=10)
 fig.tight_layout()
 fig.savefig(out)
