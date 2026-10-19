@@ -293,8 +293,8 @@ reports all 22 batches, all 80 small draws, the four nested subsets and `archaea
   also sets `adjoint_pruning_threshold = 0.0`, as the paper's later runs did, so that the configuration `nopruning` of
   the session (`\ablNoPrune`) and `grad-resid` (`\gradFDNoPruneA`, `\gradFDNoPruneB`) compute every clade. Only the
   relative gradient difference "pruning off" of `grad-check` quoted in the comments of `numbers_gpu.tex` (1.9e-7, 100
-  families) came from the earlier setting; `grad-check` here turns pruning truly off, so that number is to be measured
-  again.
+  families) came from the earlier setting; `grad-check` here turns pruning truly off and gives 8.7e-5 (19 October,
+  on the RTX 4090), the size of `\pruneGradRel`.
 - **The double-precision fits** ran on two NVIDIA L40S cards of a computing cluster, one half of the families each, and
   were compared with two single-precision fits made on an NVIDIA H100 of the same cluster, with the code of d48c48f7
   (plus, for double precision, the fix of commit bd16458d; both are in this branch). `run_cluster.py` runs the same
@@ -322,6 +322,3 @@ reports all 22 batches, all 80 small draws, the four nested subsets and `archaea
   24bcc160951d5eb5160d38467c621255), its copy in the download folder of the paper's machine is dated 8 October 2025,
   it has no file naming its source, and its 1,055 families are all among the 12,408 HOGENOM families of the AleRax data archive.
 - The paper's values for the five reference cases of the package were read from a run of them, not written to a file.
-- `measure/grad_check.py` now turns pruning off with the threshold 0 as well (see "Adjoint pruning off"); the
-  gradient difference "pruning off" of 1.9e-7 in the comments of `numbers_gpu.tex` came from the earlier setting and has
-  not been measured again.
