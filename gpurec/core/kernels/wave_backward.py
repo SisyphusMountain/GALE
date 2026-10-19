@@ -182,10 +182,12 @@ def compute_active_adjoint_row_mask(rhs, threshold, *, use_pruning=True):
         return active_mask
 
     BLOCK_S = min(256, triton.next_power_of_2(S))
+    # Pruning off keeps every row whose right-hand side is not exactly zero (skipping those changes nothing), whatever
+    # the configured threshold; keeping the threshold here would skip the same rows as pruning on.
     _select_active_adjoint_rows_kernel[(W,)](
         rhs,
         active_mask,
-        float(threshold),
+        float(threshold) if use_pruning else 0.0,
         S,
         rhs.stride(0),
         BLOCK_S,

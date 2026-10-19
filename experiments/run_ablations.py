@@ -6,14 +6,15 @@ Outputs go to OUTPUT_ROOT/ablations; analysis/ablations.py summarises them.
 Parts (run one at a time, alone on the machine):
   base, nowarm, noevict, bysize, inputorder, alone, storealpha   the modes of wrappers/gpurec_ablate.py
   nopruning    adjoint pruning off (the backward pass computes every clade; data/configs/no_pruning.toml sets both
-               use_adjoint_pruning = false and adjoint_pruning_threshold = 0, since the first alone skips the same clades)
+               use_adjoint_pruning = false and adjoint_pruning_threshold = 0, since in the code the paper's runs used the first alone skipped the
+               same clades)
   base-again   the release settings once more (base_again_1, _2), in the same session as nopruning and storealpha,
                which the paper compares with it
   grad-check   loss and gradient of the 100-family nested subset computed as released, without adjoint pruning and with
                the split term stored (measure/grad_check.py): how much pruning and storing change the gradient
   pruning-check  measure/pruning_check.py on the 1,000-family subset at the starting rates and at the rates of the run
-               base_1: clades skipped, time and gradient with pruning on, "off" by use_adjoint_pruning alone, and truly
-               off (run after base)
+               base_1: clades skipped, time and gradient with pruning on, "off" by use_adjoint_pruning alone with the threshold
+               kept, and truly off (run after base)
   storealpha-check  measure/storealpha_check.py on the 1,000-family subset: the size of the store of split terms and
                the peak GPU memory of one loss and gradient with and without it
   session      the whole table in one session (the paper's Table "tab:ablations"): three rounds, each running the eight

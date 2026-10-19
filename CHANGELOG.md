@@ -75,6 +75,8 @@ First release. Based on the development state of 4 August 2026 (commit 27cdc472)
   takes one more wave (67 instead of 66).
 
 ### Fixed
+- `use_adjoint_pruning = false` now turns adjoint pruning off: it kept the threshold
+  `adjoint_pruning_threshold` and skipped the same clades as pruning on.
 - `fit_global` crashed on a removed solver setting; `fit_genewise` crashed with an uncapped rate box.
 - Families files using `gene_tree =` (instead of `starting_gene_tree =`) were misread.
 - A missing or unreadable input file (for example a mistyped `-s` path), or `-p` naming an existing

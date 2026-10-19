@@ -1,8 +1,8 @@
 """What adjoint pruning does in release 0.1 (the paper: the 1,000-family nested subset), with one loss and gradient at
 the fit's solver settings (16 fixed-point iterations, 16 terms of the adjoint series, no warm start), at the starting
 rates 0.1 and at fitted rates. Three settings: 'on' (use_adjoint_pruning=True, threshold 1e-6: a clade is kept when the
-largest |right-hand side| of its row is >= 1e-6), 'off as released' (use_adjoint_pruning=False, same threshold: kept
-when > 1e-6), and 'truly off' (use_adjoint_pruning=False, threshold 0: kept unless its row is exactly zero, which
+largest |right-hand side| of its row is >= 1e-6), 'off as released' (use_adjoint_pruning=False, same threshold: in the
+code the paper's runs used, kept when > 1e-6, the same clades as 'on'; since that was fixed, the same as 'truly off'), and 'truly off' (use_adjoint_pruning=False, threshold 0: kept unless its row is exactly zero, which
 changes nothing). Counts the clades skipped (wrapping compute_active_adjoint_row_mask), times the evaluation
 (CUDA-synchronised, median of 3 after one warm-up), and compares losses and gradients with 'truly off'.
 usage: pruning_check.py FAMILIES_FILE SPECIES_TREE RATES_DIR

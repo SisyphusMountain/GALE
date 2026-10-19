@@ -4,7 +4,7 @@ points (0.2, 0.3, 0.1) and (0.05, 0.05, 0.05).
 The finite differences use a step of 1e-2 in each of the three base-2 logarithms of the rates, with the forward solves
 run far past convergence (512 fixed-point iterations of the rows, 2,048 of the extinction values). The gradient is then
 computed with adjoint pruning on (the threshold of the configuration file) and truly off (use_adjoint_pruning = false and
-threshold 0, as in data/configs/no_pruning.toml: false alone keeps the threshold and skips the same clades), each with
+threshold 0, as in data/configs/no_pruning.toml: in the code the paper's runs used, false alone kept the threshold and skipped the same clades), each with
 64 fixed-point iterations of the rows, 64 terms of the adjoint series and 128 iterations for the extinction values and
 their adjoint (the default values of gpurec's SolverOptions), and with eight to sixteen times more, no warm start.
 Prints, for each, the relative difference (norm of the difference over norm of the finite differences) to the finite
