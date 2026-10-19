@@ -1,4 +1,4 @@
-"""``gpurec``: the AleRax-compatible command line."""
+"""``gale``: the AleRax-compatible command line of GALE."""
 from __future__ import annotations
 
 import logging
@@ -11,10 +11,10 @@ from gpurec.cli.arguments import UsageError, parse_arguments
 
 logger = logging.getLogger("gpurec")
 # Python warnings (for example the float32 tolerance clamp) are routed here by
-# logging.captureWarnings, so they reach gpurec.log and the screen in the log format.
+# logging.captureWarnings, so they reach gale.log and the screen in the log format.
 warnings_logger = logging.getLogger("py.warnings")
-# Files and folders a gpurec run writes under -p/--prefix. An output folder holding any of them is
-# refused: gpurec has no checkpoints, so writing into it would mix the files of two runs.
+# Files and folders a GALE run writes under -p/--prefix. An output folder holding any of them is
+# refused: GALE has no checkpoints, so writing into it would mix the files of two runs.
 RESULT_NAMES = (
     "per_fam_likelihoods.txt", "model_parameters", "reconciliations", "species_trees", "perSpeciesCoverage.txt",
 )
@@ -57,21 +57,21 @@ def main(argv: list[str]) -> int:
     try:
         args = parse_arguments(argv)
     except UsageError as error:
-        sys.stderr.write(f"gpurec: {error}\n")
+        sys.stderr.write(f"gale: {error}\n")
         return 2
     previous_level = logger.level
     try:
         earlier = [name for name in RESULT_NAMES if (args.prefix / name).exists()]
         if earlier:
             sys.stderr.write(
-                f"gpurec: {args.prefix} already holds results of an earlier run ({', '.join(earlier)}); "
-                "choose another -p/--prefix or remove them (gpurec does not mix the files of two runs)\n"
+                f"gale: {args.prefix} already holds results of an earlier run ({', '.join(earlier)}); "
+                "choose another -p/--prefix or remove them (GALE does not mix the files of two runs)\n"
             )
             return 2
         args.prefix.mkdir(parents=True, exist_ok=True)
-        handlers = _configure_logging(args.prefix / "gpurec.log", args.verbose_opt)
+        handlers = _configure_logging(args.prefix / "gale.log", args.verbose_opt)
     except OSError as error:
-        sys.stderr.write(f"gpurec: cannot use {args.prefix} as the output folder: {error}\n")
+        sys.stderr.write(f"gale: cannot use {args.prefix} as the output folder: {error}\n")
         return 1
     started = time.perf_counter()
     try:
@@ -81,8 +81,8 @@ def main(argv: list[str]) -> int:
         from gpurec.io.alerax_output import ReconciliationWriter
         from gpurec.reconciliation.sampling import iter_family_reconciliations
 
-        logger.info("gpurec %s", version("gpurec"))
-        logger.info("command: %s", shlex.join(["gpurec", *argv]))
+        logger.info("GALE %s", version("gpurec"))
+        logger.info("command: %s", shlex.join(["gale", *argv]))
         cuda_device()
         logger.info("GPU: %s", torch.cuda.get_device_name(0))
         config = load_fit_config(args.config)

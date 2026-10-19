@@ -6,12 +6,12 @@ First release. Based on the development state of 4 August 2026 (commit 27cdc472)
 
 ### Added
 - Released under GPL-3.0-or-later.
-- `gpurec` command line taking AleRax 1.4.0's arguments and writing its output files.
+- `gale` command line taking AleRax 1.4.0's arguments and writing its output files.
 - Mapping files (both AleRax formats), fraction-missing files and AleRax's family filtering.
 - Reconciliation samples in RecPhyloXML with per-sample and summary count files.
 
 ### Changed
-- gpurec runs only on a CUDA GPU; the `device` arguments are gone.
+- GALE runs only on a CUDA GPU; the `device` arguments are gone.
 - Settings come from the TOML config file only; environment variables are no longer read
   (`GPUREC_WARM_ADJOINT` became `[solver] warm_adjoint`).
 - Progress messages go through Python's `logging` module (logger `gpurec`).
@@ -37,12 +37,12 @@ First release. Based on the development state of 4 August 2026 (commit 27cdc472)
   ("Configuration") now says which `[solver]` keys the final evaluation, sampling, the GLOBAL fit
   and the PER-FAMILY fit each use.
 - `--config`/`load_fit_config` also reject `[solver] e_tangent_tol` and `[solver]
-  use_hvp_warm_start`: neither one affects any fit, evaluation or sampling step in gpurec 0.1, so
+  use_hvp_warm_start`: neither one affects any fit, evaluation or sampling step in GALE 0.1, so
   a config file naming either one is refused instead of silently doing nothing.
 - The command line refuses an output folder (`-p`) that already holds results of an earlier run
   (`per_fam_likelihoods.txt`, `model_parameters/`, `reconciliations/`, `species_trees/`,
   `perSpeciesCoverage.txt`), whatever `-g` is, before any work (exit code 2). An empty folder, or
-  one holding only `gpurec.log` or unrelated files, is still accepted.
+  one holding only `gale.log` or unrelated files, is still accepted.
 - The command line accepts `-r`, AleRax's short spelling of `--rec-model`.
 - A word on the command line that is neither an option nor an option's value (for example a
   stray file name) is now a usage error instead of being ignored. The old AleRax spellings
@@ -53,7 +53,7 @@ First release. Based on the development state of 4 August 2026 (commit 27cdc472)
   only running totals for the whole-dataset files, so its memory use no longer grows with the
   number of families. New building blocks: `gpurec.reconciliation.sampling.iter_family_reconciliations`
   and `gpurec.io.alerax_output.ReconciliationWriter`.
-- `gpurec.log` records the rates (GLOBAL: one line; PER-FAMILY: the range of each rate, and one line
+- `gale.log` records the rates (GLOBAL: one line; PER-FAMILY: the range of each rate, and one line
   per family with `--verbose-opt`) and Python warnings (such as the float32 tolerance
   `RuntimeWarning`), which also appear on the screen in the log format.
 

@@ -2,7 +2,7 @@
 that runs the experiment drivers. usage: gpurec_plain.py <gpurec arguments...>"""
 import sys
 
-sys.argv = ["gpurec"] + sys.argv[1:]
+sys.argv = ["gale"] + sys.argv[1:]
 from gpurec.cli.main import entry
 
 entry()

@@ -15,7 +15,7 @@ import time
 
 WARM, REBATCH, TRACE = sys.argv[1:4]
 assert WARM in ("on", "off") and REBATCH in ("on", "off")
-sys.argv = ["gpurec"] + sys.argv[4:]
+sys.argv = ["gale"] + sys.argv[4:]
 import torch
 import gpurec.data as gdata
 import gpurec.interface as interface

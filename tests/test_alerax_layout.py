@@ -54,7 +54,7 @@ def _files(root: Path) -> set[str]:
 
 def test_same_file_names(ours):
     theirs = {line for line in (REFERENCE / "ALL_FILES.txt").read_text().split() if not NOT_WRITTEN.match(line)}
-    assert _files(ours) - {"gpurec.log"} == theirs
+    assert _files(ours) - {"gale.log"} == theirs
 
 
 def test_species_trees_are_identical(ours):

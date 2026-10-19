@@ -22,7 +22,7 @@ dependencies = [
 Repository = "https://github.com/SisyphusMountain/GALE"
 
 [project.scripts]
-gpurec = "gpurec.cli.main:entry"
+gale = "gpurec.cli.main:entry"
 
 [tool.setuptools.package-data]
 gpurec = ["config/defaults.toml"]

@@ -11,7 +11,7 @@ import importlib
 import sys
 import time
 
-sys.argv = ["gpurec"] + sys.argv[1:]
+sys.argv = ["gale"] + sys.argv[1:]
 import torch
 from gpurec import GeneReconModel
 

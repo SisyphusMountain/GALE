@@ -33,7 +33,7 @@ def test_fixed_rates_with_samples(tmp_path, monkeypatch):
         assert (out / "reconciliations" / "summaries" / f"{family}_meanSpeciesEventCounts.txt").exists()
     assert (out / "reconciliations" / "totalSpeciesEventCounts.txt").exists()
     assert len(list((out / "reconciliations" / "origins").iterdir())) == 15
-    log = (out / "gpurec.log").read_text()
+    log = (out / "gale.log").read_text()
     assert "Excluding family fam4" in log and "--fix-rates" in log
 
 
@@ -74,7 +74,7 @@ def test_run_error_returns_one(tmp_path, monkeypatch):
     (tmp_path / "species.nwk").write_text("(A,B)R;\n")
     (tmp_path / "families.txt").write_text("[FAMILIES]\n- f\ngene_tree=missing.nwk\n")
     assert main(["-f", "families.txt", "-s", "species.nwk", "-p", "out", "-g", "0"]) == 1
-    assert "no gene family" in (tmp_path / "out" / "gpurec.log").read_text()
+    assert "no gene family" in (tmp_path / "out" / "gale.log").read_text()
 
 
 def test_no_cuda_still_logs_version_and_command(tmp_path, monkeypatch):
@@ -85,9 +85,9 @@ def test_no_cuda_still_logs_version_and_command(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(model_module.torch.cuda, "is_available", lambda: False)
     assert main(["-f", "families.txt", "-s", "species.nwk", "-p", "out", "-g", "0"]) == 1
-    log = (tmp_path / "out" / "gpurec.log").read_text()
+    log = (tmp_path / "out" / "gale.log").read_text()
     assert "-g 0" in log
-    assert f"gpurec {version('gpurec')}" in log
+    assert f"GALE {version('gpurec')}" in log
     assert "CUDA GPU" in log
 
 
@@ -120,12 +120,12 @@ def test_folder_with_only_a_log_or_unrelated_files_is_accepted(tmp_path, monkeyp
     _copy_dataset(tmp_path)
     monkeypatch.chdir(tmp_path)
     (tmp_path / "out").mkdir()
-    (tmp_path / "out" / "gpurec.log").write_text("earlier log\n")
+    (tmp_path / "out" / "gale.log").write_text("earlier log\n")
     (tmp_path / "out" / "notes.txt").write_text("mine")
     # Without a GPU the run stops at the GPU check (exit 1), which is past the folder check.
     monkeypatch.setattr(model_module.torch.cuda, "is_available", lambda: False)
     assert main(["-f", "families.txt", "-s", "species.nwk", "-p", "out", "-g", "0"]) == 1
-    log = (tmp_path / "out" / "gpurec.log").read_text()
+    log = (tmp_path / "out" / "gale.log").read_text()
     assert log.startswith("earlier log\n") and "CUDA GPU" in log
 
 
@@ -174,7 +174,7 @@ def test_prefix_naming_an_existing_file_is_one_line_error(tmp_path, monkeypatch,
     assert main(["-f", "families.txt", "-s", "species.nwk", "-p", "out", "-g", "0"]) == 1
     err = capsys.readouterr().err
     assert "Traceback" not in err
-    assert err.startswith("gpurec: ") and err.count("\n") == 1 and "out" in err
+    assert err.startswith("gale: ") and err.count("\n") == 1 and "out" in err
     assert (tmp_path / "out").read_text() == "a file"
 
 
@@ -198,7 +198,7 @@ def test_unreadable_output_folder_is_one_line_error_no_traceback(tmp_path, monke
     err = capsys.readouterr().err
     assert "Traceback" not in err
     assert err.count("\n") == 1
-    assert err.startswith("gpurec: cannot use out as the output folder:") and "Permission denied" in err
+    assert err.startswith("gale: cannot use out as the output folder:") and "Permission denied" in err
 
 
 def test_python_warnings_go_to_the_log(tmp_path, monkeypatch):
@@ -217,7 +217,7 @@ def test_python_warnings_go_to_the_log(tmp_path, monkeypatch):
 
     monkeypatch.setattr(gpurec, "load_fit_config", warn_then_stop)
     assert main(["-f", "families.txt", "-s", "species.nwk", "-p", "out", "-g", "0"]) == 1
-    log = (tmp_path / "out" / "gpurec.log").read_text()
+    log = (tmp_path / "out" / "gale.log").read_text()
     assert "RuntimeWarning: tolerance below the float32 floor (test)" in log
     warning_line = next(line for line in log.splitlines() if "float32 floor (test)" in line)
     assert warning_line.startswith("[")
@@ -275,7 +275,7 @@ def test_log_records_fitted_global_rates(tmp_path, monkeypatch):
     _pretend_gpu(monkeypatch)
     monkeypatch.setattr(gpurec, "fit", _fake_fit([[0.5, 0.25, 0.125]] * 3))
     assert main(["-f", "families.txt", "-s", "species.nwk", "-p", "out", "-g", "0"]) == 0
-    log = (tmp_path / "out" / "gpurec.log").read_text()
+    log = (tmp_path / "out" / "gale.log").read_text()
     assert "rates: D 0.5 L 0.25 T 0.125" in log
 
 
@@ -290,6 +290,6 @@ def test_log_records_fitted_per_family_rates(tmp_path, monkeypatch, verbose):
     monkeypatch.setattr(gpurec, "fit", _fake_fit([[0.5, 0.25, 0.125], [0.25, 0.5, 1.0], [1.0, 1.0, 0.5]]))
     argv = ["-f", "families.txt", "-s", "species.nwk", "-p", "out", "-g", "0", "--model-parametrization", "PER-FAMILY"]
     assert main(argv + (["--verbose-opt"] if verbose else [])) == 0
-    log = (tmp_path / "out" / "gpurec.log").read_text()
+    log = (tmp_path / "out" / "gale.log").read_text()
     assert "per-family rates of 3 families: D from 0.25 to 1, L from 0.25 to 1, T from 0.125 to 1" in log
     assert ("rates of fam2: D 0.25 L 0.5 T 1" in log) == verbose

@@ -18,7 +18,7 @@ import sys
 
 MODE = sys.argv[1]
 assert MODE in ("base", "nowarm", "noevict", "bysize", "inputorder", "alone", "storealpha"), MODE
-sys.argv = ["gpurec"] + sys.argv[2:]
+sys.argv = ["gale"] + sys.argv[2:]
 import torch
 import gpurec.api.model as model
 import gpurec.data as data

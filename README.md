@@ -1,6 +1,6 @@
-# gpurec
+# GALE
 
-`gpurec` computes gene-tree/species-tree reconciliation under the "undated
+GALE computes gene-tree/species-tree reconciliation under the "undated
 DTL" model (duplication, transfer, loss — the standard model used by tools
 such as AleRax, with no assumption on the timing of species divergences). On
 a fixed species tree and a set of gene families, it computes the
@@ -16,7 +16,7 @@ Requirements:
 - A CUDA-capable GPU.
 - Python 3.11 or 3.12.
 - A Rust toolchain, installed with [rustup](https://rustup.rs/) (building
-  `gpurec` compiles two small Rust extension modules).
+  GALE compiles two small Rust extension modules).
 
 Build it from a clone (`pip install .` compiles the two Rust extensions and makes the package
 importable):
@@ -27,6 +27,8 @@ cd GALE
 pip install .
 ```
 
+This installs the command `gale`; the Python package it provides is imported as `gpurec`.
+
 Building downloads the `rustree` crate from GitHub as a Cargo dependency
 (needed by the Rust extensions), so a network connection is required at
 build time.
@@ -35,28 +37,28 @@ build time.
 
 ```bash
 cd examples/quickstart
-gpurec -f families.txt -s species.nwk -p output -g 10 --seed 42
+gale -f families.txt -s species.nwk -p output -g 10 --seed 42
 ```
 
 This fits one shared set of duplication/loss/transfer rates over the example
 families and draws 10 sample reconciliations per family into `output/`. See
 `examples/quickstart/run_cli.sh`.
 
-Because `gpurec`'s command line accepts
+Because the command line of GALE accepts
 [AleRax](https://github.com/BenoitMorel/AleRax) 1.4.0's arguments (the
 subset described below) and writes the same output files, an AleRax command
-line works after replacing the program name `alerax` by `gpurec`.
+line works after replacing the program name `alerax` by `gale`.
 
 ## Supported AleRax options
 
-`gpurec`'s command line accepts a subset of
+The command line of GALE accepts a subset of
 [AleRax](https://github.com/BenoitMorel/AleRax) 1.4.0's command-line
 arguments. Unless stated, argument names, meanings and default values match
 AleRax's.
 
 ### Implemented
 
-| Argument | AleRax default | gpurec behaviour |
+| Argument | AleRax default | GALE behaviour |
 |---|---|---|
 | `-f/--families FILE` | required | families file (see "Families file" below) |
 | `-s/--species-tree FILE` | required | Newick file; AleRax's named-tree options (`Random`, `MiniNJ`, ...) are rejected |
@@ -73,13 +75,13 @@ AleRax's.
 | `--skip-family-filtering` | off | skip the file-readability checks, as in AleRax |
 | `--verbose-opt` | off | log each optimizer step |
 
-### Accepted only with the value that describes gpurec's model
+### Accepted only with the value that describes GALE's model
 
 `-r/--rec-model UndatedDTL`, `--transfer-constraint PARENTS`,
 `--gene-tree-rooting UNIFORM`, `--origination UNIFORM`,
 `--species-tree-search SKIP`. Any other value is an error.
 (`PARENTS` is AleRax's name for "a transfer may not go to the donor or to
-one of its ancestors", which is gpurec's rule.)
+one of its ancestors", which is GALE's rule.)
 
 ### Rejected
 
@@ -98,15 +100,15 @@ pointer: `--per-family-rates` (use `--model-parametrization PER-FAMILY`),
 
 ### Output folder
 
-gpurec has no checkpoints, so it never writes into a folder that already
+GALE has no checkpoints, so it never writes into a folder that already
 holds the results of an earlier run: if the `-p/--prefix` folder contains
 `per_fam_likelihoods.txt`, `model_parameters/`, `reconciliations/`,
 `species_trees/` or `perSpeciesCoverage.txt`, the program stops before any
 work (whatever `-g` is) and names what it found. An empty folder, or one
-holding only `gpurec.log` or unrelated files, is used as is (`gpurec.log`
+holding only `gale.log` or unrelated files, is used as is (`gale.log`
 is appended to).
 
-### gpurec-only arguments
+### GALE-only arguments
 
 `--precision float32|float64`, `--config FILE` (TOML; solver, precision and
 rate settings — see "Configuration" below). They have no AleRax
@@ -119,7 +121,7 @@ removed from every line (as AleRax does, so paths cannot contain spaces);
 `- name` starts a family; keys `gene_tree` or `starting_gene_tree` (a `.ale`
 file or a file of Newick trees) and `mapping`; keys `alignment`,
 `likelihoods` and `subst_model` are accepted and ignored because they only
-concern sequence likelihoods, which gpurec does not use; any other key is
+concern sequence likelihoods, which GALE does not use; any other key is
 an error. Relative paths resolve against the current directory, as in
 AleRax.
 
@@ -178,7 +180,7 @@ post-order. These names are used in every file.
 
 - `perSpeciesCoverage.txt`: `species fraction`, leaf species, sorted by
   increasing fraction then name.
-- `gpurec.log`: the full command line, gpurec version, GPU name, filtering
+- `gale.log`: the full command line, GALE version, GPU name, filtering
   messages, optimizer progress, the rates (GLOBAL: one line; PER-FAMILY:
   the smallest and largest value of each rate, and one line per family
   with `--verbose-opt`), Python warnings, timings.
@@ -199,7 +201,7 @@ does not grow with the number of families.
   and `transferBack` on the recipient branch.
 - `reconciliations/all/<family>_samples.newick`: one sampled gene tree per
   line, internal nodes named by their event (`S`, `D`, `T`). These trees
-  have no branch lengths — gpurec's parsed clades do not keep the input
+  have no branch lengths — GALE's parsed clades do not keep the input
   trees' branch lengths.
 - `reconciliations/all/<family>_eventCounts_<i>.txt`: 8 lines `NAME:count`
   for `S SL D DL T TL L Leaf` (DL and L are 0, as in AleRax).
@@ -224,10 +226,10 @@ does not grow with the number of families.
   any parser of AleRax's files reads them.
 - Rows of `speciesEventCounts_<i>.txt` are sorted by species name (AleRax's
   order there is unspecified; its summary files are already sorted).
-- `<family>_samples.newick` has no branch lengths: gpurec's parsed clades do
+- `<family>_samples.newick` has no branch lengths: GALE's parsed clades do
   not keep the input trees' branch lengths.
 - Not written: `ccps/`, `checkpoint/`, `alerax.log` (replaced by
-  `gpurec.log`), `perSpeciesMissing.txt`, `.alerec`, `consensus_50.newick`.
+  `gale.log`), `perSpeciesMissing.txt`, `.alerec`, `consensus_50.newick`.
 
 ## Configuration
 
@@ -245,7 +247,7 @@ its default. The sections that take effect when fitting or evaluating are:
   from `init_rate`.
 - `[solver]`: settings of the fixed-point and gradient solvers.
   `e_tangent_tol` is rejected with an error: no fit, evaluation or sampling
-  step in gpurec 0.1 reads it from the config file. `use_hvp_warm_start`
+  step in GALE 0.1 reads it from the config file. `use_hvp_warm_start`
   is read by the per-family fit's exact Hessian (it has no effect on the
   global fit, whose Hessian is finite-difference): set it to `false` when
   batches are small (`[batching] clade_budget` well below the default),
@@ -268,7 +270,7 @@ its default. The sections that take effect when fitting or evaluating are:
     `use_adjoint_pruning` and `pibar_side_threshold`. It turns
     `warm_adjoint` on by itself (off only for its final accuracy checks).
 
-The GPU memory budget is fixed in gpurec 0.1 (85% of total GPU memory, minus
+The GPU memory budget is fixed in GALE 0.1 (85% of total GPU memory, minus
 1 GiB of headroom) and cannot be set from the config file; a `[memory]`,
 `[newton]` or `[regularizer]` section is rejected with an error rather than
 silently doing nothing (those settings are not read on the fitting/CLI
@@ -286,7 +288,7 @@ command line fits with).
 
 ## How it works
 
-`gpurec` preprocesses the species tree and gene families in Rust, then
+GALE preprocesses the species tree and gene families in Rust, then
 solves the reconciliation likelihood, its gradient, and reconciliation
 sampling with Triton/CUDA kernels driven from a PyTorch module. A technical
 report describing the model and the algorithms will be linked here once it
@@ -296,5 +298,5 @@ The scripts that reproduce the experiments of the paper are in `experiments/` (s
 
 ## License
 
-gpurec is free software, distributed under the GNU General Public License,
+GALE is free software, distributed under the GNU General Public License,
 version 3 or (at your option) any later version. See the LICENSE file.

@@ -1,4 +1,4 @@
-"""AleRax 1.4.0's command-line arguments, restricted to what gpurec implements."""
+"""AleRax 1.4.0's command-line arguments, restricted to what GALE implements."""
 from __future__ import annotations
 
 import argparse
@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # AleRax 1.4.0 defaults (src/ale/AleArguments.cpp); they are AleRax's documented values,
-# not gpurec settings, which is why they live here and not in the config file.
+# not GALE settings, which is why they live here and not in the config file.
 ALERAX_DEFAULT_PREFIX = "alerax_output"
 ALERAX_DEFAULT_RATE = 0.1
 ALERAX_DEFAULT_SAMPLES = 100
@@ -15,7 +15,7 @@ ALERAX_DEFAULT_MIN_COVERED_SPECIES = 4
 ALERAX_DEFAULT_TRIM_RATIO = 0.0
 ALERAX_DEFAULT_MAX_CLADE_SPLIT_RATIO = -1.0
 ALERAX_DEFAULT_PARAMETRIZATION = "GLOBAL"
-# AleRax options that describe a model choice; gpurec implements exactly one value of each.
+# AleRax options that describe a model choice; GALE implements exactly one value of each.
 FIXED_VALUE_OPTIONS = {
     "--rec-model": "UndatedDTL",
     "--transfer-constraint": "PARENTS",
@@ -28,9 +28,9 @@ SHORT_SPELLINGS = {"--rec-model": "-r"}
 # Old AleRax spellings, rejected with a pointer to what replaced them.
 DEPRECATED_OPTIONS = {
     "--per-family-rates": "use --model-parametrization PER-FAMILY",
-    "--per-species-rates": "per-species rates are not supported by gpurec",
+    "--per-species-rates": "per-species rates are not supported by GALE",
     "--verbose-opt-rates": "use --verbose-opt",
-    "--gene-tree-sample-frequency": "now --ccp-sample-frequency, which gpurec does not support",
+    "--gene-tree-sample-frequency": "now --ccp-sample-frequency, which GALE does not support",
 }
 PARAMETRIZATIONS = {"GLOBAL": "global", "PER-FAMILY": "per-family"}
 NAMED_SPECIES_TREES = ("Random", "MiniNJ", "NJst", "WMiniNJ", "Ustar", "Cherry", "CherryPro")
@@ -82,7 +82,7 @@ def _stray_words(argv: list[str], unknown: list[str]) -> list[str]:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="gpurec",
+        prog="gale",
         description="Undated DTL reconciliation on a GPU, with AleRax's arguments and output files.",
         allow_abbrev=False,
     )
@@ -108,10 +108,10 @@ def _parser() -> argparse.ArgumentParser:
         spellings = [SHORT_SPELLINGS[option], option] if option in SHORT_SPELLINGS else [option]
         parser.add_argument(*spellings, dest=_dest(option), default=value, help=f"only {value} is supported")
     parser.add_argument("--precision", choices=("float32", "float64"),
-                        help="gpurec only: floating-point precision (default: from the config file)")
-    parser.add_argument("--config", help="gpurec only: TOML file with solver, precision and rate settings")
+                        help="GALE only: floating-point precision (default: from the config file)")
+    parser.add_argument("--config", help="GALE only: TOML file with solver, precision and rate settings")
     parser.add_argument("--clade-budget", type=int,
-                        help="gpurec only: most clades per batch (default: [batching] clade_budget in defaults.toml)")
+                        help="GALE only: most clades per batch (default: [batching] clade_budget in defaults.toml)")
     return parser
 
 
@@ -134,7 +134,7 @@ def parse_arguments(argv: list[str]) -> RunArguments:
     if args.species_tree is None:
         problems.append("missing -s/--species-tree")
     elif args.species_tree in NAMED_SPECIES_TREES:
-        problems.append(f"-s {args.species_tree}: gpurec needs a species tree file")
+        problems.append(f"-s {args.species_tree}: GALE needs a species tree file")
     for option, value in FIXED_VALUE_OPTIONS.items():
         given = getattr(args, _dest(option))
         if given != value:

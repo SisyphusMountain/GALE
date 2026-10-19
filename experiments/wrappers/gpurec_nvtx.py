@@ -6,7 +6,7 @@ usage: gpurec_nvtx.py <gpurec arguments...>   (run under nsys profile --trace=cu
 import importlib
 import sys
 
-sys.argv = ["gpurec"] + sys.argv[1:]
+sys.argv = ["gale"] + sys.argv[1:]
 import torch
 from gpurec import GeneReconModel
 
