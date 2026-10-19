@@ -67,6 +67,12 @@ First release. Based on the development state of 4 August 2026 (commit 27cdc472)
   Krylov solvers (`gpurec.solver.curvature`, `gpurec.solver.krylov`), `BatchedLBFGS`, and
   `GpurecConfig.map_cv_reference` / `optimize_reference`; the AleRax output reader moved to the tests,
   its only users. The optional dependency group `experiments` is gone.
+- The wave scheduler keeps a single schedule, the greedy one built from the leaves. The three
+  schedules it also tried when that one missed its lower bound (a fixed number of waves built
+  backwards, a greedy schedule from the roots, Coffman-Graham) are gone, with the
+  `nonleaf_schedule_policy` option that chose between them. On the HOGENOM and archaeal data sets
+  the waves are unchanged; on the 5,042 families of Davín et al. 2025, one of 291 batches now
+  takes one more wave (67 instead of 66).
 
 ### Fixed
 - `fit_global` crashed on a removed solver setting; `fit_genewise` crashed with an uncapped rate box.

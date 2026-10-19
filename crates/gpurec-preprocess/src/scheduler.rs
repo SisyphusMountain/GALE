@@ -16,8 +16,6 @@ pub struct ScheduleRequest {
     pub max_dts_partial_rows: Option<usize>,
     #[serde(default = "default_dts_partial_tile_splits")]
     pub dts_partial_tile_splits: usize,
-    #[serde(default = "default_nonleaf_schedule_policy")]
-    pub nonleaf_schedule_policy: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -84,10 +82,8 @@ pub struct FamilyScheduleSummary {
 struct FamilySchedule {
     c: usize,
     split_counts: Vec<usize>,
-    children: Vec<Vec<usize>>,
     parents_of: Vec<Vec<usize>>,
     remaining: Vec<usize>,
-    bfs_level: Vec<usize>,
     priority: Vec<usize>,
     nonleaf_count: usize,
     max_level: usize,
@@ -100,21 +96,16 @@ pub(crate) fn default_dts_partial_tile_splits() -> usize {
     64
 }
 
-pub(crate) fn default_nonleaf_schedule_policy() -> String {
-    "auto".to_string()
-}
-
 pub fn schedule_global_phased_waves_request(
     request: &ScheduleRequest,
 ) -> Result<ScheduleOutput, PreprocessError> {
-    schedule_global_phased_waves_with_policy(
+    schedule_global_phased_waves(
         &request.items,
         &request.family_clade_offsets,
         request.max_wave_size,
         request.max_root_wave_size,
         request.max_dts_partial_rows,
         request.dts_partial_tile_splits,
-        &request.nonleaf_schedule_policy,
     )
 }
 
@@ -125,26 +116,6 @@ pub fn schedule_global_phased_waves(
     max_root_wave_size: Option<usize>,
     max_dts_partial_rows: Option<usize>,
     dts_partial_tile_splits: usize,
-) -> Result<ScheduleOutput, PreprocessError> {
-    schedule_global_phased_waves_with_policy(
-        items,
-        family_clade_offsets,
-        max_wave_size,
-        max_root_wave_size,
-        max_dts_partial_rows,
-        dts_partial_tile_splits,
-        "auto",
-    )
-}
-
-pub fn schedule_global_phased_waves_with_policy(
-    items: &[ScheduleItem],
-    family_clade_offsets: &[i64],
-    max_wave_size: Option<usize>,
-    max_root_wave_size: Option<usize>,
-    max_dts_partial_rows: Option<usize>,
-    dts_partial_tile_splits: usize,
-    nonleaf_schedule_policy: &str,
 ) -> Result<ScheduleOutput, PreprocessError> {
     let views = items
         .iter()
@@ -159,7 +130,6 @@ pub fn schedule_global_phased_waves_with_policy(
         max_root_wave_size,
         max_dts_partial_rows,
         dts_partial_tile_splits,
-        nonleaf_schedule_policy,
     )
 }
 
@@ -181,26 +151,6 @@ pub(crate) fn family_schedule_summary_view(
     })
 }
 
-pub(crate) fn schedule_global_phased_waves_with_policy_views(
-    items: &[ScheduleItemView<'_>],
-    family_clade_offsets: &[i64],
-    max_wave_size: Option<usize>,
-    max_root_wave_size: Option<usize>,
-    max_dts_partial_rows: Option<usize>,
-    dts_partial_tile_splits: usize,
-    nonleaf_schedule_policy: &str,
-) -> Result<ScheduleOutput, PreprocessError> {
-    schedule_global_phased_waves_impl(
-        items,
-        family_clade_offsets,
-        max_wave_size,
-        max_root_wave_size,
-        max_dts_partial_rows,
-        dts_partial_tile_splits,
-        nonleaf_schedule_policy,
-    )
-}
-
 fn schedule_global_phased_waves_impl(
     items: &[ScheduleItemView<'_>],
     family_clade_offsets: &[i64],
@@ -208,7 +158,6 @@ fn schedule_global_phased_waves_impl(
     max_root_wave_size: Option<usize>,
     max_dts_partial_rows: Option<usize>,
     dts_partial_tile_splits: usize,
-    nonleaf_schedule_policy: &str,
 ) -> Result<ScheduleOutput, PreprocessError> {
     if items.len() != family_clade_offsets.len() {
         return invalid("items and family_clade_offsets must have matching lengths");
@@ -242,14 +191,15 @@ fn schedule_global_phased_waves_impl(
     let mut waves = leaf_phase_waves(&families, family_clade_offsets, wave_cap)?;
     let mut phases = vec![1; waves.len()];
 
-    let (_policy, batches) = select_nonleaf_schedule_candidate(
+    // The non-leaf clades are placed by one greedy pass from the leaves: at each wave, the ready clades farthest
+    // from their family's root go first.
+    let batches = schedule_forward_nonleaf_waves(
         &families,
         wave_cap,
         max_root_wave_size,
         max_dts_partial_rows,
         dts_partial_tile_splits,
-        nonleaf_schedule_policy,
-    )?;
+    );
     let (nonleaf_waves, nonleaf_phases) = materialize_nonleaf_waves(
         &batches,
         &families,
@@ -337,10 +287,8 @@ fn family_schedule_data(ccp: ScheduleCcpView<'_>) -> Result<FamilySchedule, Prep
     Ok(FamilySchedule {
         c,
         split_counts,
-        children,
         parents_of,
         remaining,
-        bfs_level,
         priority,
         nonleaf_count,
         max_level,
@@ -687,656 +635,6 @@ fn push_ready_forward(
     }
     queued[fi][clade] = true;
     ready.push(Reverse((-(families[fi].priority[clade] as i64), fi, clade)));
-}
-
-fn schedule_reverse_compacted_nonleaf_waves(
-    families: &[FamilySchedule],
-    wave_cap: usize,
-    root_cap: Option<usize>,
-    max_dts_partial_rows: Option<usize>,
-    dts_partial_tile_splits: usize,
-) -> Vec<Vec<LocalClade>> {
-    let mut scheduled = families
-        .iter()
-        .map(|family| vec![false; family.c])
-        .collect::<Vec<_>>();
-    let mut queued = families
-        .iter()
-        .map(|family| vec![false; family.c])
-        .collect::<Vec<_>>();
-    let mut successors_remaining = nonleaf_successor_counts(families);
-    let mut ready: BinaryHeap<Reverse<(i64, i64, usize, usize)>> = BinaryHeap::new();
-    push_all_ready_reverse(
-        families,
-        &scheduled,
-        &mut queued,
-        &successors_remaining,
-        &mut ready,
-    );
-
-    let mut reverse_batches = Vec::new();
-    while !ready.is_empty() {
-        let mut batch = Vec::new();
-        let mut batch_ge2_groups = 0usize;
-        let mut batch_max_tiles = 0usize;
-        let mut deferred = Vec::new();
-        while !ready.is_empty() && batch.len() < wave_cap {
-            let Some(Reverse(entry)) = ready.pop() else {
-                break;
-            };
-            let (_priority, _neg_fanout, fi, clade) = entry;
-            if scheduled[fi][clade] || successors_remaining[fi][clade] != 0 {
-                continue;
-            }
-            queued[fi][clade] = false;
-            let tiles = clade_dts_partial_tiles(&families[fi], clade, dts_partial_tile_splits);
-            if !dts_guard_allows_append(
-                !batch.is_empty(),
-                batch_ge2_groups,
-                batch_max_tiles,
-                tiles,
-                max_dts_partial_rows,
-            ) {
-                queued[fi][clade] = true;
-                deferred.push(entry);
-                continue;
-            }
-            batch.push((fi, clade));
-            batch_ge2_groups += usize::from(tiles > 0);
-            batch_max_tiles = batch_max_tiles.max(tiles);
-        }
-        for entry in deferred {
-            ready.push(Reverse(entry));
-        }
-        if batch.is_empty() {
-            continue;
-        }
-        for chunk in split_root_wave(&batch, families, root_cap) {
-            reverse_batches.push(chunk.clone());
-            for (fi, clade) in &chunk {
-                scheduled[*fi][*clade] = true;
-            }
-            for (fi, clade) in &chunk {
-                for child in &families[*fi].children[*clade] {
-                    if families[*fi].split_counts[*child] == 0 {
-                        continue;
-                    }
-                    successors_remaining[*fi][*child] -= 1;
-                    push_ready_reverse(
-                        families,
-                        &scheduled,
-                        &mut queued,
-                        &successors_remaining,
-                        &mut ready,
-                        *fi,
-                        *child,
-                    );
-                }
-            }
-        }
-    }
-    reverse_batches.reverse();
-    reverse_batches
-}
-
-fn nonleaf_successor_counts(families: &[FamilySchedule]) -> Vec<Vec<usize>> {
-    let mut successors_remaining = families
-        .iter()
-        .map(|family| vec![0usize; family.c])
-        .collect::<Vec<_>>();
-    for (fi, family) in families.iter().enumerate() {
-        for clade in 0..family.c {
-            if family.split_counts[clade] == 0 {
-                continue;
-            }
-            successors_remaining[fi][clade] = family.parents_of[clade]
-                .iter()
-                .filter(|parent| family.split_counts[**parent] != 0)
-                .count();
-        }
-    }
-    successors_remaining
-}
-
-fn push_all_ready_reverse(
-    families: &[FamilySchedule],
-    scheduled: &[Vec<bool>],
-    queued: &mut [Vec<bool>],
-    successors_remaining: &[Vec<usize>],
-    ready: &mut BinaryHeap<Reverse<(i64, i64, usize, usize)>>,
-) {
-    for (fi, family) in families.iter().enumerate() {
-        for clade in 0..family.c {
-            push_ready_reverse(
-                families,
-                scheduled,
-                queued,
-                successors_remaining,
-                ready,
-                fi,
-                clade,
-            );
-        }
-    }
-}
-
-fn push_ready_reverse(
-    families: &[FamilySchedule],
-    scheduled: &[Vec<bool>],
-    queued: &mut [Vec<bool>],
-    successors_remaining: &[Vec<usize>],
-    ready: &mut BinaryHeap<Reverse<(i64, i64, usize, usize)>>,
-    fi: usize,
-    clade: usize,
-) {
-    if families[fi].split_counts[clade] == 0
-        || scheduled[fi][clade]
-        || queued[fi][clade]
-        || successors_remaining[fi][clade] != 0
-    {
-        return;
-    }
-    queued[fi][clade] = true;
-    ready.push(Reverse((
-        families[fi].priority[clade] as i64,
-        -(families[fi].children[clade].len() as i64),
-        fi,
-        clade,
-    )));
-}
-
-fn nonleaf_earliest_wave(family: &FamilySchedule, clade: usize) -> usize {
-    family.bfs_level[clade].saturating_sub(1)
-}
-
-fn nonleaf_wave_lower_bound(families: &[FamilySchedule], wave_cap: usize) -> usize {
-    let total_nonleaves = families
-        .iter()
-        .map(|family| family.nonleaf_count)
-        .sum::<usize>();
-    let max_depth = families
-        .iter()
-        .map(|family| family.max_level)
-        .max()
-        .unwrap_or(0);
-    let work_waves = total_nonleaves.div_ceil(wave_cap);
-    max_depth.max(work_waves)
-}
-
-fn schedule_deadline_nonleaf_waves(
-    families: &[FamilySchedule],
-    wave_cap: usize,
-    target_waves: usize,
-    max_dts_partial_rows: Option<usize>,
-    dts_partial_tile_splits: usize,
-) -> Option<Vec<Vec<LocalClade>>> {
-    let total_nonleaves = families
-        .iter()
-        .map(|family| family.nonleaf_count)
-        .sum::<usize>();
-    if total_nonleaves == 0 {
-        return Some(Vec::new());
-    }
-    if target_waves == 0 {
-        return None;
-    }
-
-    let mut scheduled = families
-        .iter()
-        .map(|family| vec![false; family.c])
-        .collect::<Vec<_>>();
-    let mut queued = families
-        .iter()
-        .map(|family| vec![false; family.c])
-        .collect::<Vec<_>>();
-    let mut successors_remaining = nonleaf_successor_counts(families);
-    let mut ready: BinaryHeap<Reverse<(i64, i64, i64, usize, usize)>> = BinaryHeap::new();
-    push_all_ready_deadline(
-        families,
-        &scheduled,
-        &mut queued,
-        &successors_remaining,
-        &mut ready,
-    );
-
-    let mut reverse_batches = Vec::new();
-    let mut scheduled_count = 0usize;
-    for wave_idx in (0..target_waves).rev() {
-        let mut batch = Vec::new();
-        let mut batch_ge2_groups = 0usize;
-        let mut batch_max_tiles = 0usize;
-        let mut deferred = Vec::new();
-
-        while !ready.is_empty() && batch.len() < wave_cap {
-            let Some(Reverse(entry)) = ready.pop() else {
-                break;
-            };
-            let (neg_earliest, _neg_priority, _neg_fanout, fi, clade) = entry;
-            if scheduled[fi][clade] || successors_remaining[fi][clade] != 0 {
-                continue;
-            }
-            queued[fi][clade] = false;
-            let earliest = (-neg_earliest) as usize;
-            if earliest > wave_idx {
-                return None;
-            }
-            let tiles = clade_dts_partial_tiles(&families[fi], clade, dts_partial_tile_splits);
-            if !dts_guard_allows_append(
-                !batch.is_empty(),
-                batch_ge2_groups,
-                batch_max_tiles,
-                tiles,
-                max_dts_partial_rows,
-            ) {
-                queued[fi][clade] = true;
-                deferred.push(entry);
-                continue;
-            }
-            batch.push((fi, clade));
-            batch_ge2_groups += usize::from(tiles > 0);
-            batch_max_tiles = batch_max_tiles.max(tiles);
-        }
-        for entry in deferred {
-            ready.push(Reverse(entry));
-        }
-
-        if live_ready_misses_deadline(
-            &ready,
-            &scheduled,
-            &successors_remaining,
-            wave_idx as i64 - 1,
-        ) {
-            return None;
-        }
-        if batch.is_empty() {
-            if scheduled_count < total_nonleaves
-                && !any_unscheduled_ready_nonleaf(families, &scheduled, &successors_remaining)
-            {
-                return None;
-            }
-            continue;
-        }
-
-        reverse_batches.push(batch.clone());
-        for (fi, clade) in &batch {
-            scheduled[*fi][*clade] = true;
-            scheduled_count += 1;
-        }
-        for (fi, clade) in &batch {
-            for child in &families[*fi].children[*clade] {
-                if families[*fi].split_counts[*child] == 0 {
-                    continue;
-                }
-                successors_remaining[*fi][*child] -= 1;
-                push_ready_deadline(
-                    families,
-                    &scheduled,
-                    &mut queued,
-                    &successors_remaining,
-                    &mut ready,
-                    *fi,
-                    *child,
-                );
-            }
-        }
-    }
-
-    if scheduled_count != total_nonleaves {
-        return None;
-    }
-    reverse_batches.reverse();
-    Some(reverse_batches)
-}
-
-fn push_all_ready_deadline(
-    families: &[FamilySchedule],
-    scheduled: &[Vec<bool>],
-    queued: &mut [Vec<bool>],
-    successors_remaining: &[Vec<usize>],
-    ready: &mut BinaryHeap<Reverse<(i64, i64, i64, usize, usize)>>,
-) {
-    for (fi, family) in families.iter().enumerate() {
-        for clade in 0..family.c {
-            push_ready_deadline(
-                families,
-                scheduled,
-                queued,
-                successors_remaining,
-                ready,
-                fi,
-                clade,
-            );
-        }
-    }
-}
-
-fn push_ready_deadline(
-    families: &[FamilySchedule],
-    scheduled: &[Vec<bool>],
-    queued: &mut [Vec<bool>],
-    successors_remaining: &[Vec<usize>],
-    ready: &mut BinaryHeap<Reverse<(i64, i64, i64, usize, usize)>>,
-    fi: usize,
-    clade: usize,
-) {
-    if families[fi].split_counts[clade] == 0
-        || scheduled[fi][clade]
-        || queued[fi][clade]
-        || successors_remaining[fi][clade] != 0
-    {
-        return;
-    }
-    queued[fi][clade] = true;
-    ready.push(Reverse((
-        -(nonleaf_earliest_wave(&families[fi], clade) as i64),
-        -(families[fi].priority[clade] as i64),
-        -(families[fi].children[clade].len() as i64),
-        fi,
-        clade,
-    )));
-}
-
-fn live_ready_misses_deadline(
-    ready: &BinaryHeap<Reverse<(i64, i64, i64, usize, usize)>>,
-    scheduled: &[Vec<bool>],
-    successors_remaining: &[Vec<usize>],
-    wave_idx: i64,
-) -> bool {
-    for Reverse((neg_earliest, _neg_priority, _neg_fanout, fi, clade)) in ready {
-        if scheduled[*fi][*clade] || successors_remaining[*fi][*clade] != 0 {
-            continue;
-        }
-        if -neg_earliest > wave_idx {
-            return true;
-        }
-    }
-    false
-}
-
-fn any_unscheduled_ready_nonleaf(
-    families: &[FamilySchedule],
-    scheduled: &[Vec<bool>],
-    successors_remaining: &[Vec<usize>],
-) -> bool {
-    for (fi, family) in families.iter().enumerate() {
-        for clade in 0..family.c {
-            if !scheduled[fi][clade]
-                && successors_remaining[fi][clade] == 0
-                && family.split_counts[clade] != 0
-            {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-fn schedule_coffman_graham_nonleaf_waves(
-    families: &[FamilySchedule],
-    wave_cap: usize,
-    max_dts_partial_rows: Option<usize>,
-    dts_partial_tile_splits: usize,
-) -> Result<Vec<Vec<LocalClade>>, PreprocessError> {
-    let mut labels = families
-        .iter()
-        .map(|family| vec![-1isize; family.c])
-        .collect::<Vec<_>>();
-    let mut successors_remaining = nonleaf_successor_counts(families);
-    let total_nonleaves = families
-        .iter()
-        .map(|family| family.nonleaf_count)
-        .sum::<usize>();
-    let mut ready: BinaryHeap<Reverse<(Vec<isize>, i64, usize, usize)>> = BinaryHeap::new();
-    let mut queued = families
-        .iter()
-        .map(|family| vec![false; family.c])
-        .collect::<Vec<_>>();
-    push_all_ready_cg(
-        families,
-        &labels,
-        &mut queued,
-        &successors_remaining,
-        &mut ready,
-    );
-
-    let mut labeled_count = 0usize;
-    let mut label_order = Vec::new();
-    while let Some(Reverse((_successor_labels, _priority, fi, clade))) = ready.pop() {
-        if labels[fi][clade] >= 0 || successors_remaining[fi][clade] != 0 {
-            continue;
-        }
-        queued[fi][clade] = false;
-        labels[fi][clade] = labeled_count as isize;
-        labeled_count += 1;
-        label_order.push((fi, clade));
-        for child in &families[fi].children[clade] {
-            if families[fi].split_counts[*child] == 0 {
-                continue;
-            }
-            successors_remaining[fi][*child] -= 1;
-            push_ready_cg(
-                families,
-                &labels,
-                &mut queued,
-                &successors_remaining,
-                &mut ready,
-                fi,
-                *child,
-            );
-        }
-    }
-    if labeled_count != total_nonleaves {
-        return invalid(format!(
-            "Coffman-Graham scheduler did not label all non-leaf clades: labeled={labeled_count}, total={total_nonleaves}"
-        ));
-    }
-
-    let mut assigned_wave = families
-        .iter()
-        .map(|family| vec![-1isize; family.c])
-        .collect::<Vec<_>>();
-    let mut waves: Vec<Vec<LocalClade>> = Vec::new();
-    let mut wave_ge2_groups: Vec<usize> = Vec::new();
-    let mut wave_max_tiles: Vec<usize> = Vec::new();
-    for (fi, clade) in label_order.into_iter().rev() {
-        let mut earliest = 0usize;
-        for child in &families[fi].children[clade] {
-            if families[fi].split_counts[*child] == 0 {
-                continue;
-            }
-            let child_wave = assigned_wave[fi][*child];
-            if child_wave < 0 {
-                return invalid("CG level assignment visited a parent before its child");
-            }
-            earliest = earliest.max(child_wave as usize + 1);
-        }
-        let tiles = clade_dts_partial_tiles(&families[fi], clade, dts_partial_tile_splits);
-        let mut level = earliest;
-        loop {
-            ensure_wave(level, &mut waves, &mut wave_ge2_groups, &mut wave_max_tiles);
-            if waves[level].len() < wave_cap
-                && dts_guard_allows_append(
-                    !waves[level].is_empty(),
-                    wave_ge2_groups[level],
-                    wave_max_tiles[level],
-                    tiles,
-                    max_dts_partial_rows,
-                )
-            {
-                waves[level].push((fi, clade));
-                assigned_wave[fi][clade] = level as isize;
-                wave_ge2_groups[level] += usize::from(tiles > 0);
-                wave_max_tiles[level] = wave_max_tiles[level].max(tiles);
-                break;
-            }
-            level += 1;
-        }
-    }
-    Ok(waves.into_iter().filter(|wave| !wave.is_empty()).collect())
-}
-
-fn push_all_ready_cg(
-    families: &[FamilySchedule],
-    labels: &[Vec<isize>],
-    queued: &mut [Vec<bool>],
-    successors_remaining: &[Vec<usize>],
-    ready: &mut BinaryHeap<Reverse<(Vec<isize>, i64, usize, usize)>>,
-) {
-    for (fi, family) in families.iter().enumerate() {
-        for clade in 0..family.c {
-            push_ready_cg(
-                families,
-                labels,
-                queued,
-                successors_remaining,
-                ready,
-                fi,
-                clade,
-            );
-        }
-    }
-}
-
-fn push_ready_cg(
-    families: &[FamilySchedule],
-    labels: &[Vec<isize>],
-    queued: &mut [Vec<bool>],
-    successors_remaining: &[Vec<usize>],
-    ready: &mut BinaryHeap<Reverse<(Vec<isize>, i64, usize, usize)>>,
-    fi: usize,
-    clade: usize,
-) {
-    if families[fi].split_counts[clade] == 0
-        || labels[fi][clade] >= 0
-        || queued[fi][clade]
-        || successors_remaining[fi][clade] != 0
-    {
-        return;
-    }
-    queued[fi][clade] = true;
-    let mut successor_labels = families[fi].parents_of[clade]
-        .iter()
-        .filter(|parent| families[fi].split_counts[**parent] != 0)
-        .map(|parent| labels[fi][*parent])
-        .collect::<Vec<_>>();
-    successor_labels.sort_by(|a, b| b.cmp(a));
-    ready.push(Reverse((
-        successor_labels,
-        families[fi].priority[clade] as i64,
-        fi,
-        clade,
-    )));
-}
-
-fn ensure_wave(
-    level: usize,
-    waves: &mut Vec<Vec<LocalClade>>,
-    wave_ge2_groups: &mut Vec<usize>,
-    wave_max_tiles: &mut Vec<usize>,
-) {
-    while waves.len() <= level {
-        waves.push(Vec::new());
-        wave_ge2_groups.push(0);
-        wave_max_tiles.push(0);
-    }
-}
-
-fn materialized_nonleaf_wave_count(
-    batches: &[Vec<LocalClade>],
-    families: &[FamilySchedule],
-    root_cap: Option<usize>,
-) -> usize {
-    batches
-        .iter()
-        .map(|batch| split_root_wave(batch, families, root_cap).len())
-        .sum()
-}
-
-fn select_nonleaf_schedule_candidate(
-    families: &[FamilySchedule],
-    wave_cap: usize,
-    root_cap: Option<usize>,
-    max_dts_partial_rows: Option<usize>,
-    dts_partial_tile_splits: usize,
-    nonleaf_schedule_policy: &str,
-) -> Result<(String, Vec<Vec<LocalClade>>), PreprocessError> {
-    let forward_batches = schedule_forward_nonleaf_waves(
-        families,
-        wave_cap,
-        root_cap,
-        max_dts_partial_rows,
-        dts_partial_tile_splits,
-    );
-    let policy = nonleaf_schedule_policy.trim().to_ascii_lowercase();
-    if policy == "forward" {
-        return Ok(("forward".to_string(), forward_batches));
-    }
-    if policy != "auto" {
-        return invalid(format!(
-            "nonleaf_schedule_policy must be 'auto' or 'forward', got {nonleaf_schedule_policy:?}"
-        ));
-    }
-    let mut best_name = "forward".to_string();
-    let mut best_batches = forward_batches;
-    let mut best_nonleaf_count = materialized_nonleaf_wave_count(&best_batches, families, root_cap);
-
-    let lower_bound = nonleaf_wave_lower_bound(families, wave_cap);
-    if best_nonleaf_count <= lower_bound {
-        return Ok((best_name, best_batches));
-    }
-
-    for target_waves in lower_bound..best_nonleaf_count {
-        let Some(candidate_batches) = schedule_deadline_nonleaf_waves(
-            families,
-            wave_cap,
-            target_waves,
-            max_dts_partial_rows,
-            dts_partial_tile_splits,
-        ) else {
-            continue;
-        };
-        let candidate_count =
-            materialized_nonleaf_wave_count(&candidate_batches, families, root_cap);
-        if candidate_count < best_nonleaf_count {
-            best_name = "deadline".to_string();
-            best_batches = candidate_batches;
-            best_nonleaf_count = candidate_count;
-            if best_nonleaf_count <= lower_bound {
-                return Ok((best_name, best_batches));
-            }
-        }
-    }
-
-    for (candidate_name, candidate_batches) in [
-        (
-            "reverse_compacted",
-            schedule_reverse_compacted_nonleaf_waves(
-                families,
-                wave_cap,
-                root_cap,
-                max_dts_partial_rows,
-                dts_partial_tile_splits,
-            ),
-        ),
-        (
-            "coffman_graham",
-            schedule_coffman_graham_nonleaf_waves(
-                families,
-                wave_cap,
-                max_dts_partial_rows,
-                dts_partial_tile_splits,
-            )?,
-        ),
-    ] {
-        let candidate_count =
-            materialized_nonleaf_wave_count(&candidate_batches, families, root_cap);
-        if candidate_count < best_nonleaf_count {
-            best_name = candidate_name.to_string();
-            best_batches = candidate_batches;
-            best_nonleaf_count = candidate_count;
-        }
-    }
-    Ok((best_name, best_batches))
 }
 
 fn validate_scheduled_clades(
