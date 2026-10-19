@@ -4,8 +4,8 @@ OUTPUT_ROOT/profiles.
 Parts:
   gpurec-nsys              the full fit of gpurec under NVIDIA Nsight Systems (nsys profile), with the NVTX ranges of
                            wrappers/gpurec_nvtx.py (ranges 'gradient', 'hessian', 'model build'), then the profile
-                           exported as an SQLite database (full.sqlite, read by analysis/split_gradient_ranges.py and
-                           figures/make_fig_times.py) and the two summary reports as CSV files (full_nvtx_gpu_proj_sum.csv,
+                           exported as an SQLite database (full.sqlite, read by analysis/split_gradient_ranges.py,
+                           analysis/nsys_kernels.py and figures/make_fig_times.py) and the two summary reports as CSV files (full_nvtx_gpu_proj_sum.csv,
                            full_cuda_gpu_kern_sum.csv) read by analysis/nsys_shares.py
   alerax-callgrind         AleRax as released fitting the rates of one median-size HOGENOM family (CLU_005170_8_0_C) on
                            one process: first a plain timed run (alerax_plain), then the same under valgrind's callgrind

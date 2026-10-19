@@ -133,6 +133,7 @@ Times in the last column are those of the paper's runs (RTX 4090 and i9-13900K) 
 | Figure `fig_times_gpu` (Figure 2): (a) the full-set times, (b) the shares of the profiled run | `python $E/figures/make_fig_times.py $P fig_times_gpu.pdf` | needs `gpurec-full`, `alerax-full` and `run_profiles.py gpurec-nsys` (panel b runs `analysis/split_gradient_ranges.py` on the profile) | about 15 s |
 | Agreement at the optimum, full set: `\dMedian`, `\dMean`, `\dTotal`, `\nWorse`, `\nBetter`, `\pearson` | (the two parts above) | `python $E/analysis/agreement.py OUTPUT_ROOT/hogenom/out_full_timers/per_fam_likelihoods.txt OUTPUT_ROOT/hogenom/alerax_full_per_fam_likelihoods.txt` | seconds |
 | Nsight Systems profile: `\prTRun`, `\prHess`, `\prGrad`, `\prBuild`, `\prBusy`, `\prKOne`, `\prKTwo`, `\prKThree` | `python $E/run_profiles.py $P gpurec-nsys` | `python $E/analysis/nsys_shares.py OUTPUT_ROOT/profiles/full_nvtx_gpu_proj_sum.csv OUTPUT_ROOT/profiles/full_cuda_gpu_kern_sum.csv OUTPUT_ROOT/profiles/full.err` | 12 min, then several minutes for `nsys export` and `nsys stats` |
+| Table `tab:kernels` (the five kernels that take the most time: share of kernel time, launches, median duration of a launch); `\prLaunches` (million kernel launches), `\prBusy` | (the part above) | `python $E/analysis/nsys_kernels.py OUTPUT_ROOT/profiles/full.sqlite OUTPUT_ROOT/profiles/full.err`. On the paper's profile it prints 558.4 s of kernels (76.4 % of the 730.5 s run), 14,094,448 launches, and 23.4 % 2,709,819 27.6 us; 19.7 % 2,444,768 22.8 us; 12.3 % 38,562 1.15 ms; 6.1 % 38,562 612 us; 5.9 % 134,649 155 us | about 10 s |
 | Where the time of the profiled run goes (Figure 2b): `\prTLik` (forward pass of the loss-and-gradient evaluations), `\prTBack` (backward pass), `\prTHess`, `\prTBuild`, `\prTTotal`, `\prLik`, `\prBack`, `\prOther` | (the part above) | `python $E/analysis/split_gradient_ranges.py OUTPUT_ROOT/profiles/full.sqlite OUTPUT_ROOT/profiles/full.err`: seconds and share of each part. On the paper's profile it prints forward 135.6 s, backward 161.8 s, hessian 361.3 s, model build 37.5 s, other 34.3 s (4.7 %), total 730.5 s | about 15 s |
 | The 506- and 1,042-family sets: `\tFiveHundred`, `\nFiveHundred`, `\nOneK`, and the nine runs `\tOneKRebatchMin`, `\tOneKRebatchMax`, `\tOneKRebatchMed` | `python $E/run_hogenom.py $P gpurec-506`, `... gpurec-1042`; the nine runs are `set1042_1..3` here, `warm_on_1..3` and `removal_on_1..3` of `run_warm_rebatch.py` | `run_summary.py` on `hogenom` and `warm_rebatch` | 3.2 min; 3 x 3.5 min |
 
@@ -203,7 +204,10 @@ Times in the last column are those of the paper's runs (RTX 4090 and i9-13900K) 
 | Gradient cost and check: `\tLossOnly`, `\tLossGrad`, `\fdRatioLow`, `\fdRatioHigh` (computed from these two times: 4 or 6 loss evaluations against one loss and gradient), `\gradFD` | `python $E/run_measurements.py $P grad-test` | `measurements/grad_test.log` | about 3 min |
 | Where the difference of `\gradFD` comes from: the gradient against finite differences (20 families, double precision, step 1e-2, converged forward solves) with adjoint pruning on and truly off (`use_adjoint_pruning = false` and threshold 0): `\gradFDNoPruneA` (rates 0.2, 0.3, 0.1), `\gradFDNoPruneB` (rates 0.05, 0.05, 0.05); with pruning on, about 1e-4 | `python $E/run_measurements.py $P grad-resid` | `measurements/grad_resid.log`: the paper's run printed 1.084e-04 and 1.300e-05 at (0.2, 0.3, 0.1), 8.327e-05 and 2.584e-06 at (0.05, 0.05, 0.05), each the same with 64 or 512 iterations and terms | about 6 min |
 | Fixed-point iterations: `\kSixteenMax`, `\kSixteenMed`, `\kSixteenN`, `\kThirtyTwoMax` | `python $E/run_measurements.py $P kscan` (after `run_hogenom.py gpurec-full`) | `measurements/kscan.log` | about 1 min |
-| Cost of one launch: `\tLaunch` (Figure 1) | `python $E/run_measurements.py $P launch-cost` | `measurements/launch_cost.log` | seconds |
+| Accuracy against the number K of fixed-point iterations at the rates fitted to each family (Figure `fig:kscan` (a), Table `tab:kscan` left half): 200 families, K = 2 to 256, against K = 256 | `python $E/run_measurements.py $P kscan-fitted` (after `run_hogenom.py gpurec-full`) | `measurements/kscan_fitted.csv` (every family's log-likelihood for each K), `measurements/kscan_fitted_stats.csv` (median, 95th and 99th percentiles and largest difference for each K; also printed in `kscan_fitted_stats.log`) | about 30 s |
+| The same at the rates (0.2, 0.3, 0.1), against K = 256 and against AleRax with the four changes (Figure `fig:kscan` (b), Table `tab:kscan` right half) | `python $E/run_measurements.py $P kscan-fixed` (after `run_fixed_rates.py alerax-1042`) | `measurements/kscan_fixed.csv`, `measurements/kscan_fixed_stats.csv` (rows `K256` and `AleRax`; also in `kscan_fixed_stats.log`) | about 30 s |
+| Figure `fig:kscan` | `python $E/figures/make_fig_kscan.py OUTPUT_ROOT/measurements/kscan_fitted_stats.csv OUTPUT_ROOT/measurements/kscan_fixed_stats.csv fig_kscan.pdf` | needs `kscan-fitted` and `kscan-fixed` | seconds |
+| Cost of one launch: `\tLaunch` (Figure 1), `\launchCost` (appendix, beside Table `tab:kernels`; the same number) | `python $E/run_measurements.py $P launch-cost` | `measurements/launch_cost.log` | seconds |
 | Peak memory against the clade limit of a batch (`\memEightyK`) | `python $E/run_measurements.py $P mem-scan` | `measurements/mem_scan.log` | about 1 min |
 | Table `tab:hardware` (throughput rows) | `python $E/run_measurements.py $P hardware` | `measurements/hardware_1.json`, `hardware_2.json` | a few minutes |
 
@@ -228,7 +232,9 @@ Times in the last column are those of the paper's runs (RTX 4090 and i9-13900K) 
 ## Dependencies between the parts
 
 - `run_hogenom.py gpurec-full` first: its fitted rates (`hogenom/out_full_1/model_parameters`) are used by
-  `run_precision.py all-families` and `run_measurements.py kscan`, its likelihoods by `run_planning.py family-stats`.
+  `run_precision.py all-families` and `run_measurements.py kscan` and `kscan-fitted`, its likelihoods by
+  `run_planning.py family-stats`.
+- `run_measurements.py kscan-fixed` needs `run_fixed_rates.py alerax-1042` (`fixed_rates/out_four_16`).
 - `run_planning.py family-stats` needs `run_precision.py all-families`.
 - The `score` parts need the fits of the same driver.
 - Figures need the parts named in their rows.
@@ -303,6 +309,10 @@ reports all 22 batches, all 80 small draws, the four nested subsets and `archaea
   rounds to zero anyway); the patches here are the later copy (number of passes in AleRax's model settings), which
   produced the runs with all four changes. The full-set AleRax timing used the AleRax 1.4.0 installed on the machine,
   without patch 01, which only changes printing.
+- **Rates of the K scan.** The paper's scan at fitted rates (`kscan-fitted` here) read the rates of another
+  per-family fit of all families by release 0.1, not those of `full_1`; with those rates in place of
+  `hogenom/out_full_1/model_parameters`, `kscan-fitted` and `kscan-fixed` reproduce the paper's per-family values and
+  statistics to the last digit.
 - **Figures.** `make_fig_times.py` and `make_fig_scaling.py` read the run outputs instead of `numbers_gpu.tex`.
 
 ## Not reproduced or not verified
