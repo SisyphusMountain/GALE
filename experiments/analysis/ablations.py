@@ -7,7 +7,9 @@
                     settings ("base").
   session FOLDER    the part "session" (OUTPUT_ROOT/ablations/session), which gives the paper's Table "tab:ablations":
                     three rounds over the eight configurations, round 0 untimed, rounds 1 and 2 timed (runs NAME_0,
-                    NAME_1, NAME_2). For each configuration: the wall times of rounds 1 and 2, their mean and its ratio
+                    NAME_1, NAME_2; round 2 only for the configurations near the release settings, see TIMED_RUNS; a
+                    run NAME_3 is a rerun made alone after the session, used in place of a disturbed one). For each
+                    configuration: the wall times of its timed runs not flagged below, their mean and its ratio
                     to the mean of base, the peak GPU memory and the total log-likelihood of each timed run, the kernels
                     compiled during the timed runs; and every run during which progress.txt shows another process on the
                     GPU is flagged (such a run is not to be used). It also reads the folder of the paper's own session
@@ -24,6 +26,9 @@ import sys
 
 SEPARATE_MODES = ("base", "alone", "noevict", "nowarm", "bysize", "inputorder", "base_again", "nopruning", "storealpha")
 SESSION_MODES = ("base", "alone", "noevict", "nowarm", "bysize", "inputorder", "storealpha", "nopruning")
+# Timed runs per configuration, as run_ablations.py SESSION: one for the configurations far from the release settings.
+TIMED_RUNS = {"base": 2, "alone": 1, "noevict": 1, "nowarm": 1, "bysize": 2, "inputorder": 2, "storealpha": 2,
+              "nopruning": 2}
 
 
 def wall(path):
@@ -43,10 +48,16 @@ def compiles(folder):
     return out
 
 
+# The log of a run is gale.log; the paper's own runs were made before the command was renamed from gpurec to gale
+# and wrote gpurec.log, which is read when gale.log is absent.
+LOG_NAMES = ("gale.log", "gpurec.log")
+
+
 def total_ll(folder, name):
-    log = f"{folder}/out_{name}/gpurec.log"
-    if not os.path.exists(log):
+    logs = [f"{folder}/out_{name}/{n}" for n in LOG_NAMES if os.path.exists(f"{folder}/out_{name}/{n}")]
+    if not logs:
         return None
+    log = logs[0]
     v = re.findall(r"total log-likelihood: (-?[0-9.]+)", open(log).read())
     return float(v[-1]) if v else None
 
@@ -102,7 +113,7 @@ def session(folder):
     print(f"{'run':16s} {'wall s':>8s} {'compiles':>9s} {'peak GiB':>9s} {'total log-lik':>16s}  other GPU processes")
     runs = {}
     for m in modes:
-        for k in (0, 1, 2):
+        for k in (0, 1, 2, 3):
             name = f"{m}_{k}"
             if not os.path.exists(f"{folder}/{name}.time"):
                 continue
@@ -112,28 +123,29 @@ def session(folder):
             flag = "not recorded" if seen is None else ("; ".join(seen) if seen else "none")
             print(f"{name:16s} {text(w, '%8.1f'):>8s} {text(c, '%d'):>9s} {text(p, '%.2f'):>9s} {text(ll, '%.3f'):>16s}  {flag}")
 
-    def timed(m):
-        return [runs[f"{m}_{k}"][0] for k in (1, 2) if f"{m}_{k}" in runs and runs[f"{m}_{k}"][0] is not None]
+    def used(m):
+        """The timed runs of configuration m that are used: rounds 1, 2 and the rerun 3, in that order, leaving out
+        a run that failed or during which another process was on the GPU, up to the number of TIMED_RUNS."""
+        key = "nopruning" if m == pruning_off else m
+        good = [k for k in (1, 2, 3) if f"{m}_{k}" in runs and runs[f"{m}_{k}"][0] is not None
+                and runs[f"{m}_{k}"][3] is not None and not others.get(f"{m}_{k}")]
+        return good[:TIMED_RUNS[key]], TIMED_RUNS[key]
 
-    print("\nper configuration, mean of rounds 1 and 2 (warm compile cache), relative to base:")
-    base = timed("base")
-    if len(base) != 2:
-        print("  base has not finished both timed rounds")
+    print("\nper configuration, mean of its timed runs (warm compile cache), relative to base:")
+    base_runs, base_needed = used("base")
+    if len(base_runs) != base_needed:
+        print("  base has not finished its timed runs")
         return
-    b = st.mean(base)
+    b = st.mean(runs[f"base_{k}"][0] for k in base_runs)
     for m in modes:
-        ws = timed(m)
-        if len(ws) != 2:
-            print(f"  {m:11s} timed rounds finished: {len(ws)} of 2")
+        ks, needed = used(m)
+        if len(ks) != needed:
+            print(f"  {m:11s} usable timed runs: {len(ks)} of {needed}")
             continue
-        peaks = [runs[f"{m}_{k}"][2] for k in (1, 2)]
-        lls = [runs[f"{m}_{k}"][3] for k in (1, 2)]
-        new = [runs[f"{m}_{k}"][1] for k in (1, 2)]
-        flagged = [k for k in (1, 2) if others.get(f"{m}_{k}")]
-        warning = f"   ROUND(S) {flagged} HAD ANOTHER GPU PROCESS: do not use" if flagged else ""
-        print(f"  {m:11s} {st.mean(ws):8.1f} s  x{st.mean(ws)/b:5.2f}  runs {[round(x, 1) for x in ws]}  "
-              f"peak GiB {[text(p, '%.2f') for p in peaks]}  total log-lik {[text(x, '%.3f') for x in lls]}  "
-              f"compiles {new}{warning}")
+        ws = [runs[f"{m}_{k}"][0] for k in ks]
+        print(f"  {m:11s} {st.mean(ws):8.1f} s  x{st.mean(ws)/b:5.2f}  runs {ks}: {[round(x, 1) for x in ws]}  "
+              f"peak GiB {[text(runs[f'{m}_{k}'][2], '%.2f') for k in ks]}  "
+              f"total log-lik {[text(runs[f'{m}_{k}'][3], '%.3f') for k in ks]}  compiles {[runs[f'{m}_{k}'][1] for k in ks]}")
 
 
 if __name__ == "__main__":

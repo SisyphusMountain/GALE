@@ -18,11 +18,14 @@ Parts (run one at a time, alone on the machine):
                the peak GPU memory of one loss and gradient with and without it
   session      the whole table in one session (the paper's Table "tab:ablations"): three rounds, each running the eight
                configurations base, alone, noevict, nowarm, bysize, inputorder, storealpha, nopruning one after the
-               other; round 0 is untimed (it fills the compile cache for every configuration), rounds 1 and 2 are the
-               timed runs. Runs are named CONFIGURATION_ROUND (base_0, ..., nopruning_2) and go to
+               other; round 0 is untimed (it fills the compile cache for every configuration), round 1 is timed, and
+               round 2 is timed only for the configurations near the release settings (SESSION below). Runs are named
+               CONFIGURATION_ROUND (base_0, ..., nopruning_2) and go to
                OUTPUT_ROOT/ablations/session. Before and after each run, progress.txt records the load of the machine
                and the other processes on the GPU (nvidia-smi), so that a run disturbed by another program can be set
-               aside (analysis/ablations.py session OUTPUT_ROOT/ablations/session flags it). About 2.5 hours.
+               aside (analysis/ablations.py session OUTPUT_ROOT/ablations/session flags it). About 1 h 50 min.
+  adjoint-terms  measure/adjoint_terms.py on the 1,000-family subset (after base): error of the gradient with 2 to 64
+               terms of the adjoint series against 256, at the starting rates and at the rates of base_1.
 usage: run_ablations.py PATHS_TOML PART"""
 import subprocess
 
@@ -55,6 +58,13 @@ def pruning_check(paths):
                 folder / "out_base_1" / "model_parameters"])
 
 
+def adjoint_terms(paths):
+    folder = output_dir(paths, "ablations")
+    run_python(folder, "adjoint_terms", "measure/adjoint_terms.py",
+               [hogenom_families_file(paths, "nested_1000"), hogenom_species_tree(paths),
+                folder / "out_base_1" / "model_parameters"])
+
+
 def grad_check(paths):
     folder = output_dir(paths, "ablations")
     run_python(folder, "grad_check", "measure/grad_check.py",
@@ -62,10 +72,11 @@ def grad_check(paths):
 
 
 # The configurations of the session, in the order they run in each round: (name of the runs, mode of
-# wrappers/gpurec_ablate.py, extra arguments of gpurec).
-SESSION = (("base", "base", []), ("alone", "alone", []), ("noevict", "noevict", []), ("nowarm", "nowarm", []),
-           ("bysize", "bysize", []), ("inputorder", "inputorder", []), ("storealpha", "storealpha", []),
-           ("nopruning", "base", ["--config", CONFIGS / "no_pruning.toml"]))
+# wrappers/gpurec_ablate.py, extra arguments of gpurec, number of timed runs). The configurations far from the release
+# settings (x1.7 to x23) get one timed run, those near x1 two, as in the paper.
+SESSION = (("base", "base", [], 2), ("alone", "alone", [], 1), ("noevict", "noevict", [], 1), ("nowarm", "nowarm", [], 1),
+           ("bysize", "bysize", [], 2), ("inputorder", "inputorder", [], 2), ("storealpha", "storealpha", [], 2),
+           ("nopruning", "base", ["--config", CONFIGS / "no_pruning.toml"], 2))
 
 
 def other_gpu_processes(paths):
@@ -85,7 +96,9 @@ def session(paths):
     progress = folder / "progress.txt"
     log_progress(progress, f"session start, other GPU processes: [{other_gpu_processes(paths)}]")
     for round_number in (0, 1, 2):
-        for name, mode, extra in SESSION:
+        for name, mode, extra, timed_runs in SESSION:
+            if round_number > timed_runs:
+                continue
             run = f"{name}_{round_number}"
             log_progress(progress, f"{run}: before, other GPU processes: [{other_gpu_processes(paths)}]")
             run_gpurec(paths, folder, run, "gpurec_ablate.py", [mode],
@@ -99,6 +112,7 @@ PARTS["nopruning"] = configuration("nopruning", "base", ["--config", CONFIGS / "
 PARTS["base-again"] = configuration("base_again", "base", [])
 PARTS["grad-check"] = grad_check
 PARTS["pruning-check"] = pruning_check
+PARTS["adjoint-terms"] = adjoint_terms
 PARTS["storealpha-check"] = storealpha_check
 PARTS["session"] = session
 
