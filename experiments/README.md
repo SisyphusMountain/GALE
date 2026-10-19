@@ -63,10 +63,6 @@ the GPU or the CPU.
    write them as `3_UFBOOTs/ufboot_for_alerax/FAMILY.ufboot`), the species tree
    `4_species_tree/others/Undine_C60_MHHroot_short_name.nw` (257 species) and the missing fraction of each genome,
    `5_reconcilation models/fraction_missing`.
-3. **HOGENOM, 1,055 families with mappings**, only for the appendix figure on waves (`hogenom_waves.pdf`) and its
-   table: a folder with `hogenom_S.tree` (663 species), `hogenom_trees/FAMILY.trees` (1,000 trees per family) and
-   `hogenom_mappings/FAMILY.map` (gene-to-species mappings). The paper used a copy of an archive `hogenom.tar.gz`
-   (45 MB) whose download address was not recorded (see "Not reproduced or not verified").
 
 ## Building AleRax
 
@@ -180,7 +176,7 @@ Times in the last column are those of the paper's runs (RTX 4090 and i9-13900K) 
 | Result | Command | Output and analysis | Time |
 |---|---|---|---|
 | Table `tab:waves` | `python $E/run_planning.py $P waves-table` | `planning/waves_full.json` | a few minutes (CPU only) |
-| Appendix table on 1,055 families and figure `hogenom_waves` | `python $E/run_planning.py $P waves-figure`, then `python $E/figures/make_fig_waves.py OUTPUT_ROOT/planning/waves_1055 hogenom_waves.pdf` | `planning/waves_1055.log` (the table), CSV files | about 1 min (CPU only) |
+| Appendix table and figure `hogenom_waves` (all 10,869 families, release batches against each family alone) | `python $E/run_planning.py $P waves-figure`, then `python $E/figures/make_fig_waves.py OUTPUT_ROOT/planning/waves_figure hogenom_waves.pdf` | `planning/waves_figure.log` (the table and the numbers of the text), CSV files in `planning/waves_figure` | about 1 min (CPU only) |
 | `\pBitsMed`, `\pBitsMax`, `\nUnderSingle`, `\nUnderDouble`, `\aFamClades`, `\aFamSplits`, `\aScaledSplits`, `\scSetMed` | `python $E/run_planning.py $P family-stats` (after `run_hogenom.py gpurec-full` and `run_precision.py all-families`) | `planning/family_stats.log` | a few minutes (CPU only) |
 
 ### AleRax profile (appendix, paragraph "Where the time of AleRax goes")

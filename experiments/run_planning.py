@@ -2,8 +2,8 @@
 Parts:
   waves-table    measure/waves_table.py on all 10,869 HOGENOM families: the waves planned with the release's limits
                  against each family alone (Table "tab:waves"; waves_full.json)
-  waves-figure   measure/waves_figure_data.py on the 1,055 HOGENOM families of the appendix "Scheduling the operations
-                 on a GPU" (CSV files in waves_1055/, drawn by figures/make_fig_waves.py)
+  waves-figure   measure/waves_figure_data.py on all 10,869 HOGENOM families: the table and figure of the appendix
+                 "Scheduling the operations on a GPU" (CSV files in waves_figure/, drawn by figures/make_fig_waves.py)
   family-stats   measure/family_stats.py: sizes of the families and of their likelihoods (paragraph "Where the time
                  goes", section "Numbers"); needs the outputs of run_hogenom.py gpurec-full and run_precision.py
                  all-families
@@ -20,7 +20,8 @@ def waves_table(paths):
 
 def waves_figure(paths):
     folder = output_dir(paths, "planning")
-    run_python(folder, "waves_1055", "measure/waves_figure_data.py", [paths["data"]["hogenom_1055_dir"], folder / "waves_1055"])
+    run_python(folder, "waves_figure", "measure/waves_figure_data.py",
+               [hogenom_families_file(paths, "hogenom_all"), hogenom_species_tree(paths), folder / "waves_figure"])
 
 
 def family_stats(paths):

@@ -9,9 +9,6 @@
 hogenom_root = "/ABSOLUTE/PATH/TO/alerax_data/hogenom"
 # The folder 3_Reconciliation/This_study of the archaeal deposit (Huang et al., Zenodo 18701544; see README.md).
 archaea_root = "/ABSOLUTE/PATH/TO/3_Reconciliation/This_study"
-# Only for the appendix figure on the waves of 1,055 HOGENOM families: a folder holding hogenom_S.tree,
-# hogenom_trees/FAMILY.trees and hogenom_mappings/FAMILY.map (see README.md).
-hogenom_1055_dir = "/ABSOLUTE/PATH/TO/HOGENOM"
 
 [alerax]
 # The five builds of AleRax 1.4.0 made from the patches of data/alerax (see README.md, "Building AleRax").
