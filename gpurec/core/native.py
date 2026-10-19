@@ -13,7 +13,6 @@ def _candidate_paths(module_name: str, library_filename: str) -> list[Path]:
     paths.append(_REPO_ROOT / "gpurec" / library_filename)
     crate_name = module_name.replace("_", "-")
     paths.append(_REPO_ROOT / "crates" / crate_name / "target/release" / library_filename)
-    paths.append(_REPO_ROOT / "crates" / crate_name / "target/debug" / library_filename)
     return paths
 
 
