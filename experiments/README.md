@@ -278,6 +278,11 @@ reports all 22 batches, all 80 small draws, the four nested subsets and `archaea
   documentation.
   The configuration file `configs/fit_24gb_card.toml` used by some runs of 14 October (80,000 clades per batch, Hessian
   warm start off) holds the values that became the defaults at d48c48f7, so the plain command reproduces it.
+- **Kernel compilation.** The paper's runs used the code from before the Triton kernels took wave and batch sizes at
+  run time (CHANGELOG, "Changed"). That code compiled a separate kernel for many wave sizes: 1,421 kernels for a
+  per-family fit of the 1,000-family set from an empty cache, against 57 now. The paper's timings are of runs with a
+  warm compile cache (an untimed run first), so compilation was outside them; the warm time of that fit is the same
+  with both versions (66 s and 65 s on the RTX 4090).
 - **Run order.** The table of ablations comes from one session that interleaves all the configurations (part
   `session`, the protocol of the paper's script `results_gpu/scaling_ablations/queue5.sh` of 19 October 2026), so that
   every row is measured in the same state of the machine. The parts that run one configuration at a time are the

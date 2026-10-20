@@ -14,7 +14,8 @@ from gpurec.core.kernels.pi_forward import (
 )
 
 
-@triton.jit
+# Run-time sizes (see README.md): ws is the wave's first row and changes with every wave.
+@triton.jit(do_not_specialize=["ws"])
 def _reconciliation_vjp_directional_derivative_kernel(
     Pi_ptr, dPi_ptr, Pibar_ptr, dPibar_ptr,
     Pi_offset_ptr, Pibar_offset_ptr,

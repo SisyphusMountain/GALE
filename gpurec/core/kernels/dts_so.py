@@ -15,7 +15,14 @@ from gpurec.core.kernels.pi_forward import (
 )
 
 
-@triton.jit
+# Run-time sizes (see README.md): family_offset and ws are the wave's first row; with a single family in the batch,
+# log_pD and dlog_pD point 4 bytes into their tables of log-probabilities (otherwise to copies), and
+# right_donor_adjoint_ptr and d_right_donor_adjoint_ptr start n_splits rows into their buffers, so their 16-byte
+# alignment changes from batch to batch or wave to wave.
+@triton.jit(
+    do_not_specialize=["family_offset", "ws"],
+    do_not_specialize_on_alignment=["log_pD", "dlog_pD", "right_donor_adjoint_ptr", "d_right_donor_adjoint_ptr"],
+)
 def _gene_split_event_vjp_directional_derivative_kernel(
     Pi, dPi, Pibar, dPibar, Pi_offset, Pibar_offset, v_ptr,
     split_left_rows, split_right_rows, species_child1, species_child2,
@@ -282,7 +289,8 @@ def _gene_split_event_vjp_directional_derivative_kernel(
     tl.atomic_add(d_grad_max_transfer_ptr + family * S + s_offs, d_transfer_left_retained_event_vjp + d_transfer_right_retained_event_vjp, sem="relaxed", mask=mask)
 
 
-@triton.jit
+# Run-time sizes (see README.md): n_ws (the wave's number of splits) changes with every wave.
+@triton.jit(do_not_specialize=["n_ws"])
 def _transfer_subtree_vjp_directional_derivative_kernel(
     Pi_ptr, dPi_ptr, receiver_log_probs_ptr, dreceiver_log_probs_ptr,
     donor_adjoint_ptr, d_donor_adjoint_ptr,
@@ -291,7 +299,7 @@ def _transfer_subtree_vjp_directional_derivative_kernel(
     level_offsets_ptr, level_parents_ptr,
     level_child1_ptr, level_child2_ptr,
     d_rhs_ptr, d_grad_receiver_log_probs_ptr,
-    n_ws: tl.constexpr, S: tl.constexpr, stride_C: tl.constexpr,
+    n_ws, S: tl.constexpr, stride_C: tl.constexpr,
     BLOCK_S: tl.constexpr, N_LEVELS: tl.constexpr,
     USE_RECEIVER_WEIGHTS: tl.constexpr, DTYPE: tl.constexpr,
 ):

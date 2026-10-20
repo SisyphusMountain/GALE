@@ -56,6 +56,13 @@ First release. Based on the development state of 4 August 2026 (commit 27cdc472)
 - `gale.log` records the rates (GLOBAL: one line; PER-FAMILY: the range of each rate, and one line
   per family with `--verbose-opt`) and Python warnings (such as the float32 tolerance
   `RuntimeWarning`), which also appear on the screen in the log format.
+- The Triton kernels take the sizes and offsets that change with every wave or batch (a wave's first
+  row and width, its numbers of splits and tiles) as run-time arguments, and Triton no longer
+  compiles a separate kernel for each of their values (`do_not_specialize`, see
+  `gpurec/core/kernels/README.md`): a per-family fit of 1,000 HOGENOM families compiled 1,421
+  kernels from an empty cache (3 min 31 s), now 57 (1 min 15 s); later runs on the same families
+  no longer compile kernels for wave sizes they had not met. Losses are identical and gradients
+  agree to run-to-run noise.
 
 ### Removed
 - The `gpurec fit` and `gpurec reconcile` subcommands and `fit_dtl` (replaced by the new interface).

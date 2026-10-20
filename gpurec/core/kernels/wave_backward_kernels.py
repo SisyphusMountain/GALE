@@ -9,7 +9,9 @@ import torch
 import triton
 import triton.language as tl
 
-@triton.jit
+# Run-time sizes (see README.md): rhs_ptr is a wave's slice of a [clades, species] buffer, whose start moves with the
+# wave.
+@triton.jit(do_not_specialize_on_alignment=["rhs_ptr"])
 def _select_active_adjoint_rows_kernel(
     rhs_ptr,          # [W, S]
     active_mask_ptr,  # [W] bool
@@ -41,7 +43,9 @@ def _select_active_adjoint_rows_kernel(
     tl.store(active_mask_ptr + w + lane, active)
 
 
-@triton.jit
+# Run-time sizes (see README.md): ws and W are the wave's first row and width; rhs_ptr is a wave's slice of a [clades,
+# species] buffer, whose start moves with the wave.
+@triton.jit(do_not_specialize=["ws", "W"], do_not_specialize_on_alignment=["rhs_ptr"])
 def _prepare_reconciliation_self_loop_vjp_kernel(
     Pi_star_ptr,
     Pibar_star_ptr,
@@ -330,7 +334,9 @@ def _prepare_reconciliation_self_loop_vjp_kernel(
         tl.store(speciation_child2_probability_ptr + out_offsets, tl.where(mask, speciation_child2_probability, zero), mask=store_mask)
 
 
-@triton.jit
+# Run-time sizes (see README.md): W is the wave's width; rhs_update_ptr, and term_in_ptr on the first term, are the
+# wave's slice of a [clades, species] buffer, whose start moves with the wave.
+@triton.jit(do_not_specialize=["W"], do_not_specialize_on_alignment=["term_in_ptr", "rhs_update_ptr"])
 def _apply_reconciliation_self_loop_transpose_kernel(
     term_in_ptr,
     term_out_ptr,
@@ -527,7 +533,8 @@ def _apply_reconciliation_self_loop_transpose_kernel(
         tl.store(v_k_ptr + offsets, v_prev + self_loop_vjp, mask=mask)
 
 
-@triton.jit
+# Run-time sizes (see README.md): W is the wave's width.
+@triton.jit(do_not_specialize=["W"])
 def _accumulate_transfer_receiver_log_probability_vjp_kernel(
     v_k_ptr,
     active_mask_ptr,
@@ -620,7 +627,8 @@ def _accumulate_transfer_receiver_log_probability_vjp_kernel(
     )
 
 
-@triton.jit
+# Run-time sizes (see README.md): ws and W are the wave's first row and width.
+@triton.jit(do_not_specialize=["ws", "W"])
 def _accumulate_reconciliation_event_vjp_kernel(
     Pi_star_ptr,
     Pibar_star_ptr,
@@ -902,7 +910,10 @@ def _accumulate_reconciliation_event_vjp_kernel(
         tl.store(speciation_child2_event_vjp_ptr + out_offsets, tl.where(mask, speciation_child2_event_vjp, zero), mask=store_mask)
 
 
-@triton.jit
+# Run-time sizes (see README.md): ws is the wave's first row; log_pD_arg is the batch's duplication log-probabilities:
+# with a single family in the batch it points 4 bytes into the table of log-probabilities, otherwise to a copy, so its
+# 16-byte alignment changes from batch to batch.
+@triton.jit(do_not_specialize=["ws"], do_not_specialize_on_alignment=["log_pD_arg"])
 def _accumulate_gene_split_event_vjp_kernel(
     # Converged values [C, S]
     Pi_star_ptr,
@@ -1400,11 +1411,12 @@ def _accumulate_gene_split_event_vjp_kernel(
                 tl.store(pi_l_c2_out, pi_l_c2_cur + speciation_rl_event_vjp, mask=c2_valid)
 
 
-@triton.jit
+# Run-time sizes (see README.md): n_tiles (partial tiles of the wave's splits) changes with every wave.
+@triton.jit(do_not_specialize=["n_tiles"])
 def _reduce_max_transfer_vjp_kernel(
     partial_ptr,   # [n_tiles, S]
     grad_max_transfer_ptr,   # [S]
-    n_tiles: tl.constexpr,
+    n_tiles,
     S: tl.constexpr,
     BLOCK_TILES: tl.constexpr,
     BLOCK_S: tl.constexpr,
@@ -1476,7 +1488,8 @@ def _select_active_transfer_donor_sides_kernel(
         tl.store(side_active_ptr + row + lane, row_absmax != 0.0)
 
 
-@triton.jit
+# Run-time sizes (see README.md): n_ws (the wave's number of splits) changes with every wave.
+@triton.jit(do_not_specialize=["n_ws"])
 def _accumulate_transfer_subtree_vjp_kernel(
     Pi_star_ptr,          # [C, S]
     receiver_log_probs_ptr, # [S]
@@ -1494,7 +1507,7 @@ def _accumulate_transfer_subtree_vjp_kernel(
     compact_level_child2_ptr, # [total internal nodes across levels]
     accumulated_rhs_ptr,  # [C, S], updated atomically
     grad_receiver_log_probs_ptr, # optional [S], updated atomically
-    n_ws: tl.constexpr,
+    n_ws,
     S: tl.constexpr,
     stride_C: tl.constexpr,
     BLOCK_S: tl.constexpr,

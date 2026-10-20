@@ -370,7 +370,8 @@ def _initialize_leaf_reconciliation_likelihood_kernel(
         )
 
 
-@triton.jit
+# Run-time sizes (see README.md): ws and pi_ws are the wave's first row and change with every wave.
+@triton.jit(do_not_specialize=["ws", "pi_ws"])
 def _update_reconciliation_likelihood_kernel(
     Pi_ptr,
     Pi_offset_ptr,
@@ -695,7 +696,10 @@ def _update_reconciliation_likelihood_kernel(
         tl.store(Pibar_offset_ptr + global_row, pibar_offset)
 
 
-@triton.jit
+# Run-time sizes (see README.md): family_offset is the wave's first row; log_pD is the batch's duplication
+# log-probabilities: with a single family in the batch it points 4 bytes into the table of log-probabilities,
+# otherwise to a copy, so its 16-byte alignment changes from batch to batch.
+@triton.jit(do_not_specialize=["family_offset"], do_not_specialize_on_alignment=["log_pD"])
 def _reduce_single_gene_split_events_kernel(
     Pi,
     Pi_offset,
@@ -834,7 +838,14 @@ def _reduce_single_gene_split_events_kernel(
     )
 
 
-@triton.jit
+# Run-time sizes (see README.md): MAX_TILES (tiles of the wave's largest split group), family_offset (the wave's first
+# row) and split_offset change with every wave; log_pD is the batch's duplication log-probabilities: with a single
+# family in the batch it points 4 bytes into the table of log-probabilities, otherwise to a copy, so its 16-byte
+# alignment changes from batch to batch.
+@triton.jit(
+    do_not_specialize=["family_offset", "split_offset", "MAX_TILES"],
+    do_not_specialize_on_alignment=["log_pD"],
+)
 def _stage_multiple_gene_split_event_reduction_kernel(
     Pi,
     Pi_offset,
@@ -856,7 +867,7 @@ def _stage_multiple_gene_split_event_reduction_kernel(
     family_idx,
     family_offset,
     split_offset,
-    MAX_TILES: tl.constexpr,
+    MAX_TILES,
     S: tl.constexpr,
     TILE_SPLITS: tl.constexpr,
     BLOCK_S: tl.constexpr,
@@ -986,7 +997,8 @@ def _stage_multiple_gene_split_event_reduction_kernel(
     tl.store(partial_frame_offset_ptr + partial_row, tile_base_offset)
 
 
-@triton.jit
+# Run-time sizes (see README.md): MAX_TILES (tiles of the wave's largest split group) changes with every wave.
+@triton.jit(do_not_specialize=["MAX_TILES"])
 def _finalize_multiple_gene_split_event_reduction_kernel(
     multiple_split_group_ptr,
     multiple_split_parent_rows,
@@ -996,7 +1008,7 @@ def _finalize_multiple_gene_split_event_reduction_kernel(
     partial_frame_offset_ptr,
     gene_split_log_likelihood,
     gene_split_offset,
-    MAX_TILES: tl.constexpr,
+    MAX_TILES,
     S: tl.constexpr,
     TILE_SPLITS: tl.constexpr,
     BLOCK_S: tl.constexpr,

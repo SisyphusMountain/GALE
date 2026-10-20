@@ -24,7 +24,9 @@ from gpurec.core.kernels.pi_forward import (
 _WST_NUM_WARPS = 4
 
 
-@triton.jit
+# Run-time sizes (see README.md): ws and pi_ws are the wave's first row and change with every wave; dPi_new_ptr is a
+# wave's slice of a [clades, species] buffer, whose start moves with the wave.
+@triton.jit(do_not_specialize=["ws", "pi_ws"], do_not_specialize_on_alignment=["dPi_new_ptr"])
 def _update_reconciliation_likelihood_jvp_kernel(
     Pi_ptr, dPi_ptr,
     Pi_offset_ptr,
@@ -272,7 +274,9 @@ def _update_reconciliation_likelihood_jvp_kernel(
         tl.store(dPibar_out_ptr + global_base + s_offs, d_transfer_complement_log_likelihood, mask=mask)
 
 
-@triton.jit
+# Run-time sizes (see README.md): ws and pi_ws are the wave's first row and change with every wave; dPi_new_ptr is a
+# wave's slice of a [clades, species] buffer, whose start moves with the wave.
+@triton.jit(do_not_specialize=["ws", "pi_ws"], do_not_specialize_on_alignment=["dPi_new_ptr"])
 def _apply_reconciliation_self_loop_jvp_iterations_kernel(
     Pi_ptr, dPi_ptr,
     Pi_offset_ptr,

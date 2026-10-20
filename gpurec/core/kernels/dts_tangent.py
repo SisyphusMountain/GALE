@@ -14,7 +14,10 @@ from gpurec.core.kernels.pi_forward import (
 )
 
 
-@triton.jit
+# Run-time sizes (see README.md): family_offset is the wave's first row; with a single family in the batch, log_pD and
+# dlog_pD point 4 bytes into their tables of log-probabilities (otherwise to copies), so their 16-byte alignment
+# changes from batch to batch.
+@triton.jit(do_not_specialize=["family_offset"], do_not_specialize_on_alignment=["log_pD", "dlog_pD"])
 def _gene_split_reduction_jvp_kernel(
     Pi, Pibar, dPi, dPibar, split_left_rows, split_right_rows,
     species_child1, species_child2,

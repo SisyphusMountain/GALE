@@ -43,3 +43,18 @@ traffic. Parent-chain kernels explicitly keep their loop-carried node id int32
 because Triton requires a stable loop type even when a direct caller supplies
 an int64 tensor. Values used in flattened row addresses are instead widened to
 int64 locally so products such as ``row * species_count`` cannot overflow.
+
+## Run-time sizes
+
+Triton compiles a kernel once for each combination of the values of its
+`tl.constexpr` arguments, and for each ordinary integer argument it also
+compiles separately when the value is 1 and when it is divisible by 16, and for
+each pointer argument when the address is 16-byte aligned. Sizes and offsets
+that change with every wave or batch (the wave's first row and width, its number
+of splits, tile counts) are therefore ordinary arguments listed in the
+`do_not_specialize` of `@triton.jit`, and pointers to a wave's slice of a larger
+buffer are listed in `do_not_specialize_on_alignment`: one compiled kernel then
+serves every wave and every batch. `tl.constexpr` is kept for block sizes,
+dtypes, on/off switches and layout modes, and for facts of the species tree
+(species count `S`, its row stride, `N_LEVELS`, `MAX_ANCESTOR_DEPTH`), which are
+fixed for a run.
