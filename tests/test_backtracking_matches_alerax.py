@@ -1,23 +1,29 @@
 # tests/test_backtracking_matches_alerax.py
-"""External validation of gpurec's backtracking sampler against AleRax v1.4.0.
+"""Outside check of gpurec's backtracking sampler: the species each sampled history starts at.
 
-test_fraction_missing_alerax.py already confirms gpurec's forward LIKELIHOOD
-(a single number per family) matches AleRax's, with and without fraction-missing.
-This test goes one level deeper: it checks that gpurec's *sampler* -- the native
-Rust code in crates/gpurec-backtrack that draws concrete reconciliations -- picks
-species with the same PROBABILITIES AleRax's own sampler does, not just the same
-total likelihood. Two implementations can agree on a sum while disagreeing on how
-that sum is split up; this test would catch that.
+test_fraction_missing_alerax.py checks gpurec's forward LIKELIHOOD (a single number per family)
+against an outside reference, with and without fraction-missing. This test goes one level deeper:
+it checks that gpurec's *sampler* -- the native Rust code in crates/gpurec-backtrack that draws
+concrete reconciliations -- picks the species each history starts at (the "root species", the
+first node of a sample of the native ``sample_reconciliations_many``, drawn with weights
+``Pi(root_clade, .)``) with the right PROBABILITIES, not just the right total likelihood. Two
+implementations can agree on a sum while disagreeing on how that sum is split up; this test would
+catch that.
 
-AleRax supports this directly: ``-g N --seed S`` makes it sample N reconciled gene
-trees itself (not just report a likelihood), and its output includes, per sample,
-which species branch the gene family's history STARTS at (the ``origination``
-column in ``family_0_speciesEventCounts_<k>.txt``). That's exactly what gpurec
-calls the "root species" -- the species ``sample_root_species``/the first node of
-a sample of the native ``sample_reconciliations_many`` draws, weighted by ``Pi(root_clade, .)``.
+Until GALE 1.0 was corrected (CHANGELOG.md), the reference was AleRax 1.4.0's own sampler (``-g N
+--seed S``; the ``origination`` column of its ``family_0_speciesEventCounts_<k>.txt``), compared
+with a two-sample chi-square test. AleRax 1.4.0 counts once the term of a duplication whose two
+copies carry the two child clades of a split, and GALE counts it twice (the two copies can carry
+the two clades in two ways), so on this fixture, where duplication and transfer compete, AleRax
+1.4.0 draws a different distribution. The reference is now the exact distribution
+``2^Pi(root_clade, s) / sum_s 2^Pi(root_clade, s)`` computed by GALE 2 (the development version of
+GALE: its own kernels, written separately) with ``[model] duplication_split_factor = 2``, in float64,
+and the draws are compared with it by a chi-square goodness-of-fit test. Corrected GALE 1.0's own
+Pi row gives the same probabilities to 2.3e-10. When AleRax 1.5.0, which counts the term twice, is
+released, a comparison with its sampler can come back here.
 
-Gene tree rooting -- do NOT pass ``--gene-tree-rooting ROOTED``
------------------------------------------------------------------
+Gene tree rooting, for a comparison with AleRax's sampler: do NOT pass ``--gene-tree-rooting ROOTED``
+------------------------------------------------------------------------------------------------------
 gpurec's CCP preprocessing always marginalizes uniformly over every possible
 rooting of the input gene tree (nothing in gpurec/ or crates/ can turn this
 off). AleRax's default does the same thing -- its startup log says so
@@ -40,17 +46,12 @@ test_backtracking_statistical_consistency.py.
 from __future__ import annotations
 
 import collections
-import shutil
-import subprocess
 
-import numpy as np
 import pytest
 from scipy import stats
 from gpurec.config import GpurecConfig
 
 pytestmark = pytest.mark.gpu
-
-_ALERAX = shutil.which("alerax")
 
 _SPECIES_NWK = "((A:1,B:1)AB:1,C:1)Root;"
 _GENE_NWK = "(((A_1:1,B_1:1)x:1,C_1:1)y:1,A_2:1)GeneRoot;"  # A duplicated: forces
@@ -60,56 +61,19 @@ _D = _L = _T = 0.3
 _FM_HIGH = 0.8  # applied at B and C, the two species with a single observed copy
 _N_SAMPLES = 2000
 _SIGNIFICANCE = 0.01
-_ALERAX_TIMEOUT_S = 60
+# GALE 2's root species probabilities on this fixture (float64, [model] duplication_split_factor = 2),
+# without and with fraction-missing.
+_GALE2_ROOT_SPECIES = {
+    "fm0": {"A": 0.09348122429752294, "B": 0.03555271553413202, "AB": 0.287331986185968,
+            "C": 0.07143198721962844, "Root": 0.5122020867627485},
+    "fm_high": {"A": 0.04360453443633783, "B": 0.047033109222628114, "AB": 0.230211489874391,
+                "C": 0.08670773103461865, "Root": 0.5924431354320244},
+}
 
 
-def _write_fixture(workdir, fm_b, fm_c):
+def _write_fixture(workdir):
     (workdir / "sp.nwk").write_text(_SPECIES_NWK + "\n")
     (workdir / "g.nwk").write_text(_GENE_NWK + "\n")
-    (workdir / "families.txt").write_text("[FAMILIES]\n- family_0\ngene_tree = g.nwk\n")
-    (workdir / "fm.txt").write_text(f"A 0\nB {fm_b}\nC {fm_c}\n")
-
-
-def _run_alerax_origination(workdir, out_name):
-    """Sample _N_SAMPLES reconciliations with AleRax; return a Counter of the
-    origination species (the species each sample's family history starts at)."""
-    cmd = [
-        _ALERAX,
-        "-f", "families.txt",
-        "-s", "sp.nwk",
-        "-p", out_name,
-        "-g", str(_N_SAMPLES),
-        "--seed", "0",
-        "--species-tree-search", "SKIP",
-        "--rec-model", "UndatedDTL",
-        "--model-parametrization", "GLOBAL",
-        "--fraction-missing-file", "fm.txt",
-        "--min-covered-species", "3",
-        "--fix-rates", "--d", str(_D), "--l", str(_L), "--t", str(_T),
-    ]
-    proc = subprocess.run(
-        cmd, cwd=str(workdir), capture_output=True, text=True, timeout=_ALERAX_TIMEOUT_S
-    )
-    recon_dir = workdir / out_name / "reconciliations" / "all"
-    if proc.returncode != 0 or not recon_dir.exists():
-        raise AssertionError(
-            f"AleRax sampling run failed (rc={proc.returncode}); no {recon_dir}.\n"
-            f"stdout:\n{proc.stdout[-2000:]}\nstderr:\n{proc.stderr[-2000:]}"
-        )
-    counts = collections.Counter()
-    for k in range(_N_SAMPLES):
-        path = recon_dir / f"family_0_speciesEventCounts_{k}.txt"
-        with open(path) as f:
-            next(f)  # header
-            for line in f:
-                fields = [p.strip() for p in line.split(",")]
-                if fields[6] == "1":  # 'origination' column
-                    counts[fields[0]] += 1
-                    break
-    assert sum(counts.values()) == _N_SAMPLES, (
-        f"expected exactly one origination species per sample, got totals {counts}"
-    )
-    return counts
 
 
 def _run_gpurec_origination(sp_path, g_path, fraction_missing):
@@ -139,80 +103,67 @@ def _run_gpurec_origination(sp_path, g_path, fraction_missing):
     return counts
 
 
-def _pooled_two_sample_chisquare(counts_a, counts_b, min_cell=5.0):
-    """chi-square test of homogeneity between two categorical count distributions,
-    pooling any category whose column total is too small to be well-powered into
-    a single 'other' bucket first."""
-    categories = sorted(set(counts_a) | set(counts_b))
-    big = [c for c in categories if counts_a.get(c, 0) + counts_b.get(c, 0) >= min_cell]
-    small = [c for c in categories if c not in big]
+def _pooled_goodness_of_fit(counts, probabilities, min_expected=5.0):
+    """chi-square goodness-of-fit test of categorical counts against exact probabilities, pooling
+    the categories expected fewer than ``min_expected`` times into a single 'other' bucket first."""
+    total = sum(counts.values())
+    assert set(counts) <= set(probabilities), f"drawn species outside the reference: {counts}"
+    big = [c for c in sorted(probabilities) if probabilities[c] * total >= min_expected]
+    small = [c for c in sorted(probabilities) if c not in big]
     columns = big + (["other"] if small else [])
-    table = np.zeros((2, len(columns)), dtype=float)
-    for j, c in enumerate(big):
-        table[0, j] = counts_a.get(c, 0)
-        table[1, j] = counts_b.get(c, 0)
-    if small:
-        table[0, -1] = sum(counts_a.get(c, 0) for c in small)
-        table[1, -1] = sum(counts_b.get(c, 0) for c in small)
-    assert table.shape[1] >= 2, f"not enough well-populated categories to compare: {categories}"
-    statistic, p_value, _dof, _expected = stats.chi2_contingency(table)
+    observed = [counts.get(c, 0) for c in big] + ([sum(counts.get(c, 0) for c in small)] if small else [])
+    expected = [probabilities[c] * total for c in big] + (
+        [sum(probabilities[c] for c in small) * total] if small else [])
+    assert len(columns) >= 2, f"not enough well-populated categories to compare: {columns}"
+    statistic, p_value = stats.chisquare(observed, f_exp=expected)
     return statistic, p_value, columns
 
 
 @pytest.fixture(scope="module")
 def origination_counts(tmp_path_factory):
-    if _ALERAX is None:
-        pytest.skip("alerax binary not found on PATH")
     import torch
 
     if not torch.cuda.is_available():
         pytest.skip("CUDA not available")
 
     results = {}
-    for tag, fm_b, fm_c, gpurec_fm in (("fm0", 0, 0, None), ("fm_high", _FM_HIGH, _FM_HIGH, {"B": _FM_HIGH, "C": _FM_HIGH})):
-        workdir = tmp_path_factory.mktemp(f"alerax_backtrack_{tag}")
-        _write_fixture(workdir, fm_b, fm_c)
-        results[f"alerax_{tag}"] = _run_alerax_origination(workdir, "out")
-        results[f"gpurec_{tag}"] = _run_gpurec_origination(
-            workdir / "sp.nwk", workdir / "g.nwk", gpurec_fm
-        )
+    for tag, gpurec_fm in (("fm0", None), ("fm_high", {"B": _FM_HIGH, "C": _FM_HIGH})):
+        workdir = tmp_path_factory.mktemp(f"backtrack_origination_{tag}")
+        _write_fixture(workdir)
+        results[tag] = _run_gpurec_origination(workdir / "sp.nwk", workdir / "g.nwk", gpurec_fm)
 
     print(
-        "\n[backtracking vs AleRax v1.4.0] origination species over "
+        "\n[backtracking] origination species over "
         f"{_N_SAMPLES} samples each, D=L=T={_D} (duplication+transfer both active):\n"
-        f"  fm=0        gpurec={dict(results['gpurec_fm0'])}\n"
-        f"              alerax={dict(results['alerax_fm0'])}\n"
-        f"  fm={_FM_HIGH} (B,C)  gpurec={dict(results['gpurec_fm_high'])}\n"
-        f"              alerax={dict(results['alerax_fm_high'])}\n"
+        f"  fm=0        gpurec={dict(results['fm0'])}\n"
+        f"  fm={_FM_HIGH} (B,C)  gpurec={dict(results['fm_high'])}\n"
     )
     return results
 
 
-def test_origination_distribution_matches_alerax_fm0(origination_counts):
-    """No fraction-missing: gpurec's sampled origination species distribution
-    matches AleRax's own sampler, with duplication and transfer both active and
-    genuinely competing to explain the family."""
-    statistic, p_value, columns = _pooled_two_sample_chisquare(
-        origination_counts["gpurec_fm0"], origination_counts["alerax_fm0"]
+def test_origination_distribution_matches_reference_fm0(origination_counts):
+    """No fraction-missing: gpurec's sampled origination species distribution matches the
+    reference, with duplication and transfer both active and genuinely competing to explain the
+    family."""
+    statistic, p_value, columns = _pooled_goodness_of_fit(
+        origination_counts["fm0"], _GALE2_ROOT_SPECIES["fm0"]
     )
     assert p_value > _SIGNIFICANCE, (
-        f"origination distributions diverge at fm=0: chi2={statistic:.3f}, "
+        f"origination distribution diverges at fm=0: chi2={statistic:.3f}, "
         f"p={p_value:.3g}, categories={columns}\n"
-        f"gpurec={dict(origination_counts['gpurec_fm0'])}\n"
-        f"alerax={dict(origination_counts['alerax_fm0'])}"
+        f"gpurec={dict(origination_counts['fm0'])}\nreference={_GALE2_ROOT_SPECIES['fm0']}"
     )
 
 
-def test_origination_distribution_matches_alerax_fraction_missing(origination_counts):
-    """Large fraction-missing at the two species with a single observed copy:
-    gpurec's sampler shifts its origination distribution the same way AleRax's
-    does, on top of the same duplication+transfer competition."""
-    statistic, p_value, columns = _pooled_two_sample_chisquare(
-        origination_counts["gpurec_fm_high"], origination_counts["alerax_fm_high"]
+def test_origination_distribution_matches_reference_fraction_missing(origination_counts):
+    """Large fraction-missing at the two species with a single observed copy: gpurec's sampler
+    shifts its origination distribution as the reference does, on top of the same
+    duplication+transfer competition."""
+    statistic, p_value, columns = _pooled_goodness_of_fit(
+        origination_counts["fm_high"], _GALE2_ROOT_SPECIES["fm_high"]
     )
     assert p_value > _SIGNIFICANCE, (
-        f"origination distributions diverge at fm={_FM_HIGH}: chi2={statistic:.3f}, "
+        f"origination distribution diverges at fm={_FM_HIGH}: chi2={statistic:.3f}, "
         f"p={p_value:.3g}, categories={columns}\n"
-        f"gpurec={dict(origination_counts['gpurec_fm_high'])}\n"
-        f"alerax={dict(origination_counts['alerax_fm_high'])}"
+        f"gpurec={dict(origination_counts['fm_high'])}\nreference={_GALE2_ROOT_SPECIES['fm_high']}"
     )
