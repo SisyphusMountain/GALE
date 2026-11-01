@@ -497,7 +497,7 @@ separate tangent-adjoint solve accounts for $\dd v_i$.
 Consider a gene split $n$ with left child row $L_n$, right child row $R_n$,
 parent row $P_n$, and split log-prior $\sigma_n$.  For species state $s$, let
 \begin{align}
-  d_{\mathrm{dup}}^{(n)}(s)&=\sigma_n+\ell^D(s)+\Pi_{L_n}(s)+\Pi_{R_n}(s), \\
+  d_{\mathrm{dup}}^{(n)}(s)&=\sigma_n+1+\ell^D(s)+\Pi_{L_n}(s)+\Pi_{R_n}(s), \\
   d_{\mathrm{trans},L}^{(n)}(s)&=\sigma_n+\Pi_{L_n}(s)+\bar\Pi_{R_n}(s), \\
   d_{\mathrm{trans},R}^{(n)}(s)&=\sigma_n+\Pi_{R_n}(s)+\bar\Pi_{L_n}(s), \\
   d_{\mathrm{spec},LR}^{(n)}(s)&=\sigma_n+\ell^S(s)
@@ -507,6 +507,12 @@ parent row $P_n$, and split log-prior $\sigma_n$.  For species state $s$, let
 \end{align}
 These are respectively duplication, transfer with the left child retained,
 transfer with the right child retained, and the two speciation assignments.
+The $1=\log_2 2$ in $d_{\mathrm{dup}}^{(n)}$ counts the duplication twice: its two
+copies can carry the two child clades in two ways (left clade on the first copy
+and right clade on the second, or the reverse), which are two distinct
+histories.  ALE's undated likelihood and AleRax~1.4.0 count it once.  The
+constant is \texttt{LOG2\_DUPLICATION\_SPLIT\_FACTOR} in \texttt{pi\_forward.py}; it has
+no tangent.
 The parent split contribution is
 \begin{equation}
   D_P(s)=\underset{n:\,P_n=P}{\operatorname{LSE}_2}

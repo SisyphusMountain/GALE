@@ -1,8 +1,64 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 1.0 — 2026-11-01
 
-First release. Based on the development state of 4 August 2026 (commit 27cdc472).
+First release. Based on the development state of 4 August 2026 (commit 27cdc472). The tag `1.0`
+was first placed on 22 October 2026 on code with the modelling error corrected below; it now
+points to the corrected code. (This section was headed "0.1.0 — unreleased" until then; the
+package version in `pyproject.toml` is still 0.1.0.)
+
+### Corrected (1 November 2026)
+- **The likelihood counted once a duplication that it must count twice.** In the undated DTL
+  recursion, the term of a duplication whose two copies carry the two child clades of a split of
+  the gene tree now counts twice: the two copies can carry the two clades in two ways (left clade
+  on the first copy and right clade on the second, or the reverse), which are two distinct
+  histories, each with the full probability. GALE 1.0 as first tagged, like ALE's undated
+  likelihood and AleRax 1.4.0, counted it once, which gave each history half its weight for every
+  duplication separating two observed groups of genes; that weight differs from one history to
+  the next, so it is not a constant of the data and it biased the fitted rates. "Duplication,
+  then one copy lost" already counted twice and is unchanged; the extinction probabilities are
+  unchanged.
+- **What changes for users:** per-family log-likelihoods (`per_fam_likelihoods.txt`,
+  `FitResult.log_likelihoods`) are higher on families whose reconciliations hold such duplications
+  (by exactly ln 2 nats on a family whose only reconciliation holds one); the fitted rates change
+  (GLOBAL and PER-FAMILY); the sampled reconciliations change, since the sampler gives these
+  duplications twice the weight against the other events of a split. GALE's values therefore no
+  longer equal AleRax 1.4.0's on families with duplications. When the duplication rate is
+  negligible the two still agree to rounding.
+- Where: the forward kernels (`gpurec/core/kernels/pi_forward.py`, which holds the constant
+  `LOG2_DUPLICATION_SPLIT_FACTOR`, the base-2 log of 2), the gradient kernel
+  (`wave_backward_kernels.py`), the kernels of the Hessian-vector products (`dts_tangent.py`,
+  `dts_so.py`) and the native sampler (`crates/gpurec-backtrack/src/lib.rs`). There is no option
+  to get the old count back.
+- Checks: on the species tree ((X,Y),Z), GALE's double-precision log-likelihood of every named
+  gene tree with two or three genes equals the log of its probability obtained by adding up all
+  histories with at most 41 gene copies (no recursion involved) to at most 1.6e-8 nats, while the
+  once-counted value is off by 0.011 to 1.25 nats (`tests/test_duplication_split_factor.py`, which
+  also checks the gradient and Hessian-vector products against central differences, and the
+  sampler's draws against the tables it reads). On the 200 HOGENOM families of
+  `experiments/data/families/hogenom_200.txt` at the rates (0.2, 0.3, 0.1), GALE's per-family
+  log-likelihoods in double precision agree with those of GALE 2 (the development version, an
+  independent implementation, with `[model] duplication_split_factor = 2`) to 9.1e-13 nats at
+  most (5.4e-16 relative).
+
+### Tests (correction of 1 November 2026)
+The tests that compared GALE with AleRax 1.4.0 on families with duplications cannot pass any
+more, and their references were replaced by independent ones (they are not deleted):
+- `tests/test_fidelity_alerax.py`: `test_trees_1`, `test_trees_2` and `test_trees_200` still
+  compare with AleRax's value (duplication rate 1e-10); `test_trees_3` with AleRax's value plus
+  ln 2 (its only reconciliation holds one duplication separating two clades); `test_mixed_200`
+  with GALE 2's value at the same rates, in double precision.
+- `tests/test_fraction_missing_alerax.py`: no longer runs the `alerax` binary; compares with GALE
+  2's values at fraction-missing 0 and 0.3 (tolerance 1e-9 nats instead of 5e-3 and 3e-4).
+- `tests/test_backtracking_matches_alerax.py`: no longer runs AleRax's sampler; the sampled
+  starting species are compared with the exact probabilities computed by GALE 2 (chi-square
+  goodness of fit instead of a two-sample test).
+- `tests/_fraction_missing_oracle.py` (the CPU reference of `test_fraction_missing_oracle.py`)
+  counts the duplication of a split twice too.
+- New: `tests/test_duplication_split_factor.py` and its enumeration of histories,
+  `tests/_history_enumeration.py`.
+When AleRax 1.5.0, which counts these duplications twice, is released, its values will become the
+references of the three AleRax tests again (their docstrings say where).
 
 ### Added
 - Released under GPL-3.0-or-later.

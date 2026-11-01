@@ -139,6 +139,14 @@ Times in the last column are those of the paper's runs (RTX 4090 and i9-13900K) 
 
 ### Agreement with AleRax at fixed rates (section "Example", appendix "Numerical accuracy")
 
+Since the correction of 1 November 2026 (`CHANGELOG.md`), gpurec counts twice a duplication whose two copies carry the
+two child clades of a split, and AleRax 1.4.0 (as released or with the four changes) counts it once. At (0.2, 0.3, 0.1)
+the correction raised the double-precision log-likelihood of every one of the 200 families of `hogenom_200.txt`, by
+0.07 to 116 nats (median 7.6), so the comparisons of this section now measure that difference of the model on top of
+the numerical agreement; the paper's numbers of this section were measured with gpurec before the correction.
+An AleRax that counts the duplication twice (AleRax 1.5.0, to be released) is needed to measure the numerical agreement
+alone again.
+
 | Result | Command | Output and analysis | Time |
 |---|---|---|---|
 | gpurec at (0.2, 0.3, 0.1) on 1,042 families, converged settings | `python $E/run_fixed_rates.py $P gpurec-1042` | `fixed_rates/gpurec_1042.txt` | about 1 min |
@@ -148,7 +156,7 @@ Times in the last column are those of the paper's runs (RTX 4090 and i9-13900K) 
 | Figure `fig_alerax_fixes` | `python $E/figures/make_fig_alerax_fixes.py $P fig_alerax_fixes.pdf` | needs `gpurec-1042` and `alerax-1042` | seconds |
 | gpurec's default command with `--fix-rates`: `\tGpuFix` ("done in"), `\tGpuFixCmd` (wall time) | `python $E/run_fixed_rates.py $P gpurec-cli-1042` | `run_summary.py OUTPUT_ROOT/fixed_rates cli_1042` | 17 s |
 | Tails of the agreement comparisons (99th and 95th percentiles of the per-family differences): `\fxStockPNine`, `\fxStockPFive`, `\fxPatPNine`, `\fxPatPFive`, `\fxFixPNine`, `\fxFixPFive`, `\fxAllPNine`, `\fxAllPFive` (Table `tab:agree`), `\archFxPNine`, `\archFxPFive`, `\pPNine`, `\pPFive`, `\fpFitPNine`, `\fpFitPFive`, `\fpRunPNine`, `\fpRunPFive`, `\aIterPNine`, `\aIterPFive`, `\dLowPOne`, `\dLowMax` (full-set optima, gpurec minus AleRax: 1st percentile and lowest), `\agMaxAbs`, `\agMaxRel` (main text: the 200 families of `hogenom_200.txt` at fixed rates against the four changes) | the parts named in the docstring of the script: `run_fixed_rates.py` `gpurec-1042`, `alerax-1042`, `alerax-200-passes`; `run_archaea.py fixed-rates-200`; `run_precision.py all-families`, `double-fits`; `run_hogenom.py gpurec-full`, `gpurec-full-timers`, `alerax-full` | `python $E/analysis/agreement_tails.py OUTPUT_ROOT` (skips a comparison whose files are missing) | seconds |
-| The five reference cases of the package (single precision within 1.5e-5 nats of AleRax, double within 1e-12) | the package's own test, `pytest tests/test_fidelity_alerax.py` | the test checks bounds of 1e-3 nats (single) and 1e-8 (double); the paper's values were read from a run of these cases | seconds |
+| The five reference cases of the package (single precision within 1.5e-5 nats of AleRax, double within 1e-12) | the package's own test, `pytest tests/test_fidelity_alerax.py` | the test checks bounds of 1e-3 nats (single) and 1e-8 (double); the paper's values were read from a run of these cases, before the correction of 1 November 2026. Since then the references of two of the cases are no longer AleRax's values (AleRax's plus ln 2 for `test_trees_3`, GALE 2's value for `test_mixed_200`; see the test's docstring) | seconds |
 
 ### Agreement of the optima, 200 random families (appendix "Details of the experiments")
 

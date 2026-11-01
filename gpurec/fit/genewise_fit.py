@@ -1,8 +1,10 @@
 """Default genewise (per-family) DTL-rate fitting recipe.
 
 ``fit_genewise`` is the standard way to fit independent per-family Duplication/Loss/Transfer rates to a
-converged, box-bounded maximum-likelihood optimum -- the same model AleRax fits with ``--rec-model
-UndatedDTL --model-parametrization PER-FAMILY``. The recipe (validated on the archaea / Hogenom genewise
+converged, box-bounded maximum-likelihood optimum -- the model AleRax fits with ``--rec-model
+UndatedDTL --model-parametrization PER-FAMILY``, except that a duplication separating the two child
+clades of a split counts twice (README.md, "The likelihood, and its one difference from AleRax
+1.4.0"). The recipe (validated on the archaea / Hogenom genewise
 benchmarks) is:
 
   1. **Adam warm-up** -- a few large clipped steps (lr=1, grad-clip-norm 10) projected against the rate

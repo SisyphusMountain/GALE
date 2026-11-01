@@ -49,6 +49,27 @@ Because the command line of GALE accepts
 subset described below) and writes the same output files, an AleRax command
 line works after replacing the program name `alerax` by `gale`.
 
+## The likelihood, and its one difference from AleRax 1.4.0
+
+GALE computes the likelihood of the undated DTL model with one difference
+from ALE's undated likelihood and AleRax 1.4.0: a duplication whose two
+copies carry the two child clades of a split of the gene tree counts twice.
+The two copies can carry the two clades in two ways (the left clade on the
+first copy and the right clade on the second, or the other way round), and
+these are two distinct histories, each with the full probability. ALE and
+AleRax 1.4.0 count such a duplication once, which gives every history half
+its weight for each of its duplications that separate two observed groups
+of genes. "Duplication, then one copy lost" counts twice in both programs.
+
+GALE 1.0 as first tagged (22 October 2026) followed AleRax 1.4.0 here; it was
+corrected on 1 November 2026 (see `CHANGELOG.md`). As a result GALE's
+per-family log-likelihoods are higher than AleRax 1.4.0's on families whose
+reconciliations hold such duplications (by exactly ln 2 for a family whose
+only reconciliation holds one of them), the fitted rates differ, and so do
+the sampled reconciliations. When the duplication rate is negligible (as on
+the test fixtures fitted at a duplication rate of 1e-10), the two programs
+agree to rounding. The extinction probabilities are not affected.
+
 ## Supported AleRax options
 
 The command line of GALE accepts a subset of
@@ -222,6 +243,9 @@ does not grow with the number of families.
 
 ### Deliberate differences from AleRax
 
+- `per_fam_likelihoods.txt`, the rates and the sampled reconciliations
+  differ from AleRax 1.4.0's on families with duplications: see "The
+  likelihood, and its one difference from AleRax 1.4.0" above.
 - Numbers are written at full precision, not AleRax's 6 significant digits;
   any parser of AleRax's files reads them.
 - Rows of `speciesEventCounts_<i>.txt` are sorted by species name (AleRax's
