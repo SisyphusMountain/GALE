@@ -6,6 +6,7 @@ __all__ = [
     "compute_dts_forward",
     "compute_leaf_initial_wave_step",
     "compute_wave_step",
+    "LOG2_DUPLICATION_SPLIT_FACTOR",
     "_load_event_log_probability",
     "_prepare_wave_launch",
     "_select_log_split_probs",
@@ -16,6 +17,19 @@ __all__ = [
 
 
 _SUPPORTED_FLOAT_DTYPES = (torch.float32, torch.float64)
+
+# Base-2 logarithm of 2, added to the term of a duplication whose two copies carry the two child
+# clades of a gene split. Those are two distinct histories: the left clade on the first copy and the
+# right clade on the second, or the other way round, and each has the full probability. The term
+# therefore counts twice. ALE's undated likelihood, AleRax 1.4.0 and GALE 1.0 as first tagged (22
+# October 2026) counted it once, which gives each history half its weight for every such
+# duplication. The term of "duplication, then one copy lost" has its own 2, for the same reason (the
+# ``1.0 +`` of ``duplication_loss_const`` in core/inference/forward.py). It is not a setting: the count
+# of histories is a fact of the model. Every kernel that forms this term (the forward kernels here,
+# wave_backward_kernels.py, dts_tangent.py, dts_so.py) reads this one value; the native sampler
+# (crates/gpurec-backtrack/src/lib.rs) adds the same 1.0, and the tests check that its draws follow
+# this likelihood.
+LOG2_DUPLICATION_SPLIT_FACTOR = tl.constexpr(1.0)
 
 
 def _tl_float_dtype(dtype):
@@ -777,7 +791,10 @@ def _reduce_single_gene_split_events_kernel(
         right_pi_offset + left_pibar_offset - split_frame_offset
     ).to(DTYPE)
 
-    duplication_log_term = split_log_prior + duplication_log_probability + left_pi + right_pi + child_pair_frame_shift
+    duplication_log_term = (
+        split_log_prior + duplication_log_probability + LOG2_DUPLICATION_SPLIT_FACTOR + left_pi + right_pi
+        + child_pair_frame_shift
+    )
     transfer_left_retained_log_term = split_log_prior + left_pi + right_pibar + left_transfer_frame_shift
     transfer_right_retained_log_term = split_log_prior + right_pi + left_pibar + right_transfer_frame_shift
     speciation_lr_log_term = (
@@ -939,7 +956,10 @@ def _stage_multiple_gene_split_event_reduction_kernel(
         left_transfer_frame_shift = (left_pi_offset + right_pibar_offset - new_base_offset).to(DTYPE)
         right_transfer_frame_shift = (right_pi_offset + left_pibar_offset - new_base_offset).to(DTYPE)
 
-        duplication_log_term = split_log_prior + duplication_log_probability + left_pi + right_pi + child_pair_frame_shift
+        duplication_log_term = (
+            split_log_prior + duplication_log_probability + LOG2_DUPLICATION_SPLIT_FACTOR + left_pi + right_pi
+            + child_pair_frame_shift
+        )
         transfer_left_retained_log_term = split_log_prior + left_pi + right_pibar + left_transfer_frame_shift
         transfer_right_retained_log_term = split_log_prior + right_pi + left_pibar + right_transfer_frame_shift
         speciation_lr_log_term = (

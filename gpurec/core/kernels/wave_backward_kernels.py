@@ -9,6 +9,8 @@ import torch
 import triton
 import triton.language as tl
 
+from gpurec.core.kernels.pi_forward import LOG2_DUPLICATION_SPLIT_FACTOR
+
 # Run-time sizes (see README.md): rhs_ptr is a wave's slice of a [clades, species] buffer, whose start moves with the
 # wave.
 @triton.jit(do_not_specialize_on_alignment=["rhs_ptr"])
@@ -1121,7 +1123,11 @@ def _accumulate_gene_split_event_vjp_kernel(
             duplication_log_probability = log_pD
             speciation_log_probability = log_pS
 
-        duplication_log_term = duplication_log_probability + left_reconciliation_log_likelihood + right_reconciliation_log_likelihood + child_pair_frame_shift
+        # LOG2_DUPLICATION_SPLIT_FACTOR: the 2 of the forward's duplication term (pi_forward.py).
+        duplication_log_term = (
+            duplication_log_probability + LOG2_DUPLICATION_SPLIT_FACTOR + left_reconciliation_log_likelihood
+            + right_reconciliation_log_likelihood + child_pair_frame_shift
+        )
         transfer_left_retained_log_term = left_reconciliation_log_likelihood + right_transfer_complement_log_likelihood + left_transfer_frame_shift
         transfer_right_retained_log_term = right_reconciliation_log_likelihood + left_transfer_complement_log_likelihood + right_transfer_frame_shift
         speciation_lr_log_term = speciation_log_probability + left_child1_reconciliation_log_likelihood + right_child2_reconciliation_log_likelihood + child_pair_frame_shift

@@ -8,6 +8,12 @@ use std::collections::HashMap;
 use std::fmt;
 
 const NEG_INF: f64 = f64::NEG_INFINITY;
+/// Base-2 logarithm of 2, added to the weight of a duplication whose two copies carry the two child
+/// clades of a gene split: the two ways of giving the two clades to the two copies are two distinct
+/// histories, so the term counts twice. It is the same 1.0 as `LOG2_DUPLICATION_SPLIT_FACTOR` in
+/// gpurec/core/kernels/pi_forward.py, which puts it in the likelihood these tables come from; the
+/// draws follow that likelihood only if both agree. Not a setting: it is a fact of the model.
+const LOG2_DUPLICATION_SPLIT_FACTOR: f64 = 1.0;
 
 #[derive(Debug)]
 enum BacktrackError {
@@ -261,7 +267,7 @@ impl<'a, 'c> Sampler<'a, 'c> {
             let lsp = input.log_split_probs[split_idx];
             add(
                 SplitDup(split_idx),
-                lsp + p_d + input.pi(left, species) + input.pi(right, species),
+                lsp + p_d + LOG2_DUPLICATION_SPLIT_FACTOR + input.pi(left, species) + input.pi(right, species),
             );
             add(
                 SplitTransfer(split_idx, true),

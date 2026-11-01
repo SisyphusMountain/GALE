@@ -7,6 +7,7 @@ import triton
 import triton.language as tl
 
 from gpurec.core.kernels.pi_forward import (
+    LOG2_DUPLICATION_SPLIT_FACTOR,
     _load_event_log_probability,
     _select_log_split_probs,
     _tl_float_dtype,
@@ -130,9 +131,12 @@ def _gene_split_event_vjp_directional_derivative_kernel(
     d_right_pi_child1 = tl.load(dPi + right_base + c1, mask=child1_valid, other=0.0)
     d_left_pi_child2 = tl.load(dPi + left_base + c2, mask=child2_valid, other=0.0)
     split_log_prior = tl.load(log_split_probs + n)
+    # LOG2_DUPLICATION_SPLIT_FACTOR: the 2 of the forward's duplication term (pi_forward.py); a
+    # constant, so it has no tangent.
     duplication_log_term = (
         split_log_prior
         + duplication_log_probability
+        + LOG2_DUPLICATION_SPLIT_FACTOR
         + left_pi
         + right_pi
         + child_frame_shift

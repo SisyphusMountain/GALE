@@ -30,8 +30,10 @@ Math implemented (base-2 log space throughout, matching production):
   ``SL1 = (log_pS + E_s2) + Pi[:, child1(s)]``,
   ``SL2 = (log_pS + E_s1) + Pi[:, child2(s)]``,
   with ``Pibar[gamma, s] = lse2_{r valid}(Pi[gamma, r]) + max_transfer[s]``.
-  Internal clades additionally get the gene-split (DTS) term; leaf clades
-  additionally get the leaf term.
+  Internal clades additionally get the gene-split (DTS) term, whose duplication
+  term is ``1 + log_pD + Pi_left + Pi_right`` (the two copies can carry the two
+  child clades in two ways, so it counts twice); leaf clades additionally get
+  the leaf term.
   **E-only fraction-missing (AleRax v1.4.0)**: the Pi/CLV leaf boundary carries
   NO fraction-missing term. A leaf clade mapped to species column ``s`` keeps the
   plain speciation ``log_pS[s]`` and every other column is -inf -- exactly the
@@ -226,7 +228,8 @@ def oracle_nll(species_nwk: str, gene_nwk: str, D: float, L: float, T: float, fr
             pi_R_c1 = _gather_species(pi_R, sp_child1, c1_valid)
             pi_L_c2 = _gather_species(pi_L, sp_child2, c2_valid)
             split_terms = torch.stack([
-                lp + log_pD + pi_L + pi_R,             # duplication
+                # duplication: log2(2) + ..., the two copies can carry the two clades in two ways
+                lp + 1.0 + log_pD + pi_L + pi_R,
                 lp + pi_L + pibar_R,                   # transfer, left retained
                 lp + pi_R + pibar_L,                   # transfer, right retained
                 lp + log_pS + pi_L_c1 + pi_R_c2,       # speciation L->c1, R->c2

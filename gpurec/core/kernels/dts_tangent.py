@@ -7,6 +7,7 @@ import triton
 import triton.language as tl
 
 from gpurec.core.kernels.pi_forward import (
+    LOG2_DUPLICATION_SPLIT_FACTOR,
     _load_event_log_probability,
     _tl_float_dtype,
     _validate_offset_tensor,
@@ -111,9 +112,12 @@ def _gene_split_reduction_jvp_kernel(
     child_frame_shift = (left_pi_offset + right_pi_offset - gene_split_row_offset).to(DTYPE)
     left_transfer_frame_shift = (left_pi_offset + right_pibar_offset - gene_split_row_offset).to(DTYPE)
     right_transfer_frame_shift = (right_pi_offset + left_pibar_offset - gene_split_row_offset).to(DTYPE)
+    # LOG2_DUPLICATION_SPLIT_FACTOR: the 2 of the forward's duplication term (pi_forward.py); a
+    # constant, so it has no tangent.
     duplication_log_term = (
         split_log_prior
         + duplication_log_probability
+        + LOG2_DUPLICATION_SPLIT_FACTOR
         + left_pi
         + right_pi
         + child_frame_shift
