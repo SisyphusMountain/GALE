@@ -60,6 +60,17 @@ more, and their references were replaced by independent ones (they are not delet
 When AleRax 1.5.0, which counts these duplications twice, is released, its values will become the
 references of the three AleRax tests again (their docstrings say where).
 
+### Corrected (2 November 2026)
+- **The memory budget counted twice what other programs hold on the card.** The budget of a run
+  was the free memory reported by the driver, which already leaves out the memory of other
+  programs, minus that memory a second time (`gpurec/core/memory_policy.py`,
+  `cuda_memory_budget_bytes`). With a few GiB held by another program the budget fell to 0 and
+  every gradient was refused ("estimated scratch 0.00 GiB above memory budget 0.00 GiB"). The
+  memory other programs held at the start is now taken off the card's total only, before the
+  fraction of the card a run may use. Values computed are unchanged; this only decides how much
+  memory a run plans to use, and whether it refuses. Test:
+  `tests/test_memory_gate.py::test_budget_counts_other_programs_once`.
+
 ### Added
 - Released under GPL-3.0-or-later.
 - `gale` command line taking AleRax 1.4.0's arguments and writing its output files.

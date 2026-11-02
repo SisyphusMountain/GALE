@@ -102,6 +102,25 @@ def test_budget_counts_reclaimable_cache(monkeypatch):
     assert tight == 0  # free_b(1) - reserve(1) = 0, no pool to credit -> genuine OOM still caught
 
 
+def test_budget_counts_other_programs_once(monkeypatch):
+    """Other programs hold 8 GiB of a 24 GiB card, PyTorch holds nothing yet: the driver reports 16 GiB
+    free. The budget is the smaller of 85 % of the 16 GiB they leave and the 16 GiB free minus the 1 GiB
+    reserve, 13.6 GiB. GALE 1.0 as first released also took the 8 GiB off the free memory, which the
+    driver had already done, and gave 7 GiB; with 12 GiB held by others it gave 0 and every backward
+    pass was refused."""
+    GIB = 1024 ** 3
+    total, others = 24 * GIB, 8 * GIB
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
+    monkeypatch.setattr(torch.cuda, "mem_get_info", lambda idx=0: (total - others, total))
+    monkeypatch.setattr(torch.cuda, "memory_reserved", lambda idx=0: 0)
+    monkeypatch.setattr(torch.cuda, "memory_allocated", lambda idx=0: 0)
+    monkeypatch.setattr(memory_policy, "_NON_PYTORCH_AT_START", {})
+    budget = memory_policy.cuda_memory_budget_bytes(0, default_fraction=0.85, default_reserve_gib=1.0)
+    assert memory_policy._NON_PYTORCH_AT_START == {0: others}
+    assert budget == int((total - others) * 0.85)
+
+
 def test_wave_scratch_is_subset_of_warm_adjoint_reservation(monkeypatch):
     """Invariant the fix relies on: a single wave's W is a subset of the batch's clades, so its
     scratch never exceeds the ``max_batch_clades`` scratch that ``warm_adjoint_fits`` reserved.

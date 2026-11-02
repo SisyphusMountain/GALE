@@ -67,13 +67,18 @@ def cuda_memory_budget_bytes(
     available_b = int(free_b) + reclaimable_b
     fraction = float(default_fraction)
     reserve_b = int(float(default_reserve_gib) * GIB)
+    # free_b already leaves out what other programs hold now, so the memory they held at the start is taken
+    # off the card's total only, before the fraction: subtracting it from available_b as well counted it
+    # twice, and on a card where other programs held a few GiB the budget fell to 0 and every backward pass
+    # was refused.
     non_pytorch_b = _non_pytorch_bytes_at_start(idx, total_b)
-    return max(0, min(int(total_b * fraction), max(0, available_b - reserve_b - non_pytorch_b)))
+    cap_b = int(max(0, int(total_b) - non_pytorch_b) * fraction)
+    return max(0, min(cap_b, max(0, available_b - reserve_b)))
 
 
 # Memory on each card used by something other than PyTorch's caching allocator when the process first
 # asks for the budget (the CUDA context, the desktop, other programs): measured once per device, then
-# kept, so the budget subtracts the same baseline for the whole run.
+# kept, so the fraction of the card a run may use is a fraction of the memory those did not hold.
 _NON_PYTORCH_AT_START: dict[int, int] = {}
 
 
