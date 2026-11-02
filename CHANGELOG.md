@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Rate classes: `--model-parametrization <file>` takes AleRax's custom parametrization (lines
+  `<node label> <types>`), one duplication, loss and transfer rate per class of species branches.
+  The fit starts every class at the global optimum and refines them with L-BFGS-B on the specieswise
+  model (the class gradient is the sum of its branches' gradients); `model_parameters.txt` lists
+  each node's rates. Python: `fit`/`evaluate` take `classes=`, `gpurec.io.rate_classes`,
+  `gpurec.fit.class_fit`.
+
 ## 1.0 — 2026-11-01
 
 First release. Based on the development state of 4 August 2026 (commit 27cdc472). The tag `1.0`

@@ -358,6 +358,43 @@ def stream_batches(
     )
 
 
+def stream_family_nll(
+    batch_statics: list[_BatchStatic],
+    theta: torch.Tensor,
+    receiver_weights: torch.Tensor,
+    origination_weights: torch.Tensor,
+    *,
+    n_families: int,
+) -> torch.Tensor:
+    """Per-family NLL (bits) at rates shared by all families (global ``[3]`` or per-species
+    ``[S,3]``), without a gradient: the forward solve of ``evaluate_static_loss_grad`` with the
+    per-family head ``nll_vector_from_root_rows`` instead of its sum."""
+    loss_dtype = _stream_accumulator_dtype(batch_statics, theta.dtype)
+    nll = torch.empty((int(n_families),), dtype=loss_dtype, device=theta.device)
+    for static in batch_statics:
+        if static.genewise:
+            raise ValueError("stream_family_nll takes shared rates; use stream_genewise_loss_vector_grad")
+        accumulator_dtype = _static_accumulator_dtype(static, theta.dtype)
+        with torch.no_grad():
+            E, _E_s1, _E_s2, _Ebar, root_rows, *_ = solve_resident_e_pi(
+                static, theta, receiver_weights, warm_start_E=static.warm_E
+            )
+            o_lp, o_p = _origination_log_probs(
+                origination_weights_for_static(static, origination_weights),
+                like=theta,
+                accumulator_dtype=accumulator_dtype,
+            )
+            loss_vec = nll_vector_from_root_rows(
+                root_rows,
+                E,
+                origination_log_probs=o_lp,
+                origination_probs=o_p,
+                accumulator_dtype=accumulator_dtype,
+            )
+        nll.index_copy_(0, static.family_index_tensor, loss_vec.to(device=theta.device, dtype=loss_dtype))
+    return nll
+
+
 def stream_genewise_loss_vector_grad(
     batch_statics: list[_BatchStatic],
     theta: torch.Tensor,

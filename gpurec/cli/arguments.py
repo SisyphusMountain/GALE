@@ -45,7 +45,8 @@ class RunArguments:
     families: Path
     species_tree: Path
     prefix: Path
-    parametrization: str
+    parametrization: str  # "global", "per-family" or "classes"
+    rate_classes_file: Path | None  # the file of a "classes" parametrization
     start_rates: tuple[float, float, float]
     fix_rates: bool
     samples: int
@@ -90,7 +91,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("-s", "--species-tree", help="rooted species tree (Newick file)")
     parser.add_argument("-p", "--prefix", default=ALERAX_DEFAULT_PREFIX, help="output folder")
     parser.add_argument("--model-parametrization", default=ALERAX_DEFAULT_PARAMETRIZATION,
-                        help="GLOBAL or PER-FAMILY")
+                        help="GLOBAL, PER-FAMILY or a rate-class file (lines '<node label> <types>')")
     parser.add_argument("--d", type=float, default=ALERAX_DEFAULT_RATE, help="duplication rate (start value)")
     parser.add_argument("--l", type=float, default=ALERAX_DEFAULT_RATE, help="loss rate (start value)")
     parser.add_argument("--t", type=float, default=ALERAX_DEFAULT_RATE, help="transfer rate (start value)")
@@ -139,10 +140,15 @@ def parse_arguments(argv: list[str]) -> RunArguments:
         given = getattr(args, _dest(option))
         if given != value:
             problems.append(f"{option} {given} is not supported (only {value})")
+    rate_classes_file = None
     if args.model_parametrization not in PARAMETRIZATIONS:
-        problems.append(
-            f"--model-parametrization {args.model_parametrization} is not supported (only GLOBAL or PER-FAMILY)"
-        )
+        if Path(args.model_parametrization).is_file():
+            rate_classes_file = Path(args.model_parametrization)
+        else:
+            problems.append(
+                f"--model-parametrization {args.model_parametrization} is not supported "
+                "(GLOBAL, PER-FAMILY or an existing rate-class file)"
+            )
     for option in ("d", "l", "t"):
         if not getattr(args, option) > 0:
             problems.append(f"--{option} must be positive")
@@ -156,7 +162,8 @@ def parse_arguments(argv: list[str]) -> RunArguments:
         families=Path(args.families),
         species_tree=Path(args.species_tree),
         prefix=Path(args.prefix),
-        parametrization=PARAMETRIZATIONS[args.model_parametrization],
+        parametrization="classes" if rate_classes_file is not None else PARAMETRIZATIONS[args.model_parametrization],
+        rate_classes_file=rate_classes_file,
         start_rates=(args.d, args.l, args.t),
         fix_rates=args.fix_rates,
         samples=args.gene_tree_samples,

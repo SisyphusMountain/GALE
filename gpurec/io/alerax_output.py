@@ -15,6 +15,7 @@ from gpurec.reconciliation.files import (
     species_event_counts_text,
     transfers_text,
 )
+from gpurec.fit.class_fit import class_rates
 from gpurec.interface import FitResult
 from gpurec.reconciliation.summaries import (
     add_origin_counts,
@@ -107,6 +108,13 @@ def write_alerax(result: FitResult, samples: dict[str, list[ReconciledGeneTree]]
     if result.parametrization == "global":
         d, l, t = (format_number(value) for value in rates[0])
         rows = "".join(f"{species.labels[node]} {d} {l} {t}\n" for node in alerax_node_order(species))
+        _write(parameters / "model_parameters.txt", "node D L T\n" + rows)
+    elif result.parametrization == "classes":  # each node with the rates of its classes
+        node_rates = class_rates(result.log2_rates)
+        rows = "".join(
+            f"{species.labels[node]} " + " ".join(format_number(value) for value in node_rates[node]) + "\n"
+            for node in alerax_node_order(species)
+        )
         _write(parameters / "model_parameters.txt", "node D L T\n" + rows)
     else:
         for name, row in zip(data.names, rates):
