@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **With a fraction-missing file, the reported log-likelihoods are those of the observed genes.** A
+  gene observed on a leaf species missing a fraction `m` of its genes is observed with probability
+  `1 - m`; the per-family log-likelihoods (`per_fam_likelihoods.txt`, `FitResult.log_likelihoods`)
+  now include the sum over the family's genes of `ln(1 - m)`, as AleRax 1.5.0 does. The passes still
+  keep `m` in the extinction probabilities only: the added term does not depend on the rates, so
+  fitted rates, gradients, Hessian-vector products and sampled reconciliations are unchanged, and it
+  is computed once per family (`GeneReconModel.observed_gene_log2_factors`), at no measurable cost.
+  Checks: on 200 archaeal families (Huang et al.) at rates (0.2, 0.3, 0.1) with their
+  fraction-missing file, GALE's values equal AleRax 1.5.0's (16 fixed-point passes) to 0.0047 nats
+  at most (0.74 nats median and 19.3 at most before); `tests/test_observed_gene_factor.py` compares
+  with AleRax 1.5.0 on ((A,B),(C,D)) with and without missing fractions.
+
 ## 1.0 — 2026-11-01
 
 First release. Based on the development state of 4 August 2026 (commit 27cdc472). The tag `1.0`

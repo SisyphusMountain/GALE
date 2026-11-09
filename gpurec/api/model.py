@@ -266,6 +266,35 @@ class GeneReconModel(torch.nn.Module):
         for static in getattr(self, "batch_statics", []):
             static.solver_options = options
 
+    def observed_gene_log2_factors(self) -> torch.Tensor:
+        """Each family's ``sum over its observed genes of log2(1 - m)``, ``[families]`` (float64,
+        on the model's card), ``m`` the fraction missing of the gene's leaf species; zeros without
+        missing fractions.
+
+        A gene observed on a leaf species missing a fraction ``m`` of its genes is observed with
+        probability ``1 - m``: the probability of the observed genes is the likelihood the passes
+        compute (where ``m`` enters only the extinction probabilities, the convention of AleRax
+        1.4.0) times the product of ``1 - m`` over the family's genes, as AleRax 1.5.0 computes it.
+        That product does not depend on the rates, so it is added once per family to the reported
+        log-likelihood and never enters a pass, a gradient or a fit. Each gene is one leaf clade of
+        its family: the clades whose ``leaf_species_index`` is not -1."""
+        families = sum(len(batch) for batch in self.family_batches)
+        device = self.batch_statics[0].family_index_tensor.device
+        factors = torch.zeros((families,), dtype=torch.float64, device=device)
+        if self.leaf_fm_log is None:
+            return factors
+        # log2(1 - 2**leaf_fm_log): 0 on a species with nothing missing (leaf_fm_log = -inf).
+        log2_kept = torch.log2(-torch.expm1(self.leaf_fm_log.to(device=device, dtype=torch.float64)
+                                           * math.log(2.0)))
+        for static in self.batch_statics:
+            species = static.wave_layout["leaf_species_index"].to(device)
+            leaf = species >= 0
+            in_batch = torch.zeros((len(static.family_indices),), dtype=torch.float64, device=device)
+            in_batch.index_add_(0, static.wave_layout["family_idx"].to(device)[leaf].long(),
+                                log2_kept[species[leaf].long()])
+            factors.index_copy_(0, static.family_index_tensor.to(device), in_batch)
+        return factors
+
     def _theta_for_static(self, static: _BatchStatic, theta: torch.Tensor) -> torch.Tensor:
         return theta_for_static(static, theta, genewise=self.genewise)
 

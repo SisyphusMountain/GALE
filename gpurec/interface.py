@@ -38,6 +38,14 @@ class FitResult:
         }
 
 
+def _reported_log_likelihoods(names, nll_bits, model) -> dict[str, float]:
+    """``{family name: log-likelihood in nats}``: the probability of the observed genes, the passes'
+    likelihood (``nll_bits``, bits) times the product of 1 - m over each family's genes
+    (``GeneReconModel.observed_gene_log2_factors``; nothing changes without missing fractions)."""
+    log2_likelihoods = -nll_bits.double().cpu() + model.observed_gene_log2_factors().cpu()
+    return {name: float(bits) * LN2 for name, bits in zip(names, log2_likelihoods)}
+
+
 def _log2_rates(rates) -> torch.Tensor:
     values = [float(value) for value in rates]
     if len(values) != 3 or not all(value > 0.0 and math.isfinite(value) for value in values):
@@ -58,7 +66,7 @@ def _result(data, parametrization, log2_rates, config, history, wall_seconds) ->
     with torch.no_grad():
         model.theta.copy_(log2_rates.to(device=model.theta.device, dtype=model.theta.dtype))
         nll_bits = model.genewise_loss_vector().double().cpu()
-    log_likelihoods = {name: -float(bits) * LN2 for name, bits in zip(data.names, nll_bits)}
+    log_likelihoods = _reported_log_likelihoods(data.names, nll_bits, model)
     return FitResult(data, parametrization, log2_rates.double().cpu(), log_likelihoods, model, history, wall_seconds)
 
 
