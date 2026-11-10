@@ -61,7 +61,7 @@ def test_cli_takes_a_rate_class_file(tmp_path):
     path = tmp_path / "classes.txt"
     path.write_text("AB DLT\n")
     args = parse_arguments(["-f", "f.txt", "-s", "s.nwk", "--model-parametrization", str(path)])
-    assert args.parametrization == "classes" and args.rate_classes_file == path
+    assert args.parametrization == "cladewise" and args.rate_classes_file == path
 
 
 def test_cli_rejects_a_missing_rate_class_file(tmp_path):
@@ -77,7 +77,7 @@ def test_every_node_of_a_class_gets_its_class_rate(tmp_path, monkeypatch):
     import torch
 
     from gpurec import load_families, write_alerax
-    from gpurec.fit.class_fit import species_log2_rates
+    from gpurec.fit.cladewise_fit import species_log2_rates
     from gpurec.interface import FitResult
 
     monkeypatch.chdir(Path(__file__).parent / "data" / "release")
@@ -89,7 +89,7 @@ def test_every_node_of_a_class_gets_its_class_rate(tmp_path, monkeypatch):
     d = math.log2(1.9501728222660242e-05)
     up = math.nextafter(d, 0.0)
     class_log2 = [torch.tensor(v, dtype=torch.float64) for v in ([d, up, up], [math.log2(2.07e-05)], [math.log2(0.0207)])]
-    result = FitResult(data, "classes", species_log2_rates(classes, class_log2),
+    result = FitResult(data, "cladewise", species_log2_rates(classes, class_log2),
                        {name: -1.0 for name in data.names}, None, None, 0.0, classes)
     write_alerax(result, None, tmp_path)
     rows = (tmp_path / "model_parameters" / "model_parameters.txt").read_text().splitlines()[1:]

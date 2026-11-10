@@ -1,4 +1,4 @@
-"""Rate-class fit: one duplication, loss and transfer rate per class of species branches.
+"""Cladewise fit: one duplication, loss and transfer rate per class of species branches.
 
 The classes (``gpurec.io.rate_classes``, AleRax's ``--model-parametrization <file>``) tie the
 per-species rates of GALE's specieswise mode: branch ``s`` takes the log2 rates of its classes,
@@ -9,9 +9,10 @@ gradient serves unchanged. L-BFGS-B minimises it in the rate box ``config.rates`
 (``fit_pi``/``fit_neu``); the per-family NLL is then evaluated at the eval tier, as ``fit_global``
 does.
 
-Idea from Oliver Schick, Aleraxv2 (https://github.com/oliver-schick/RALE), docs/notes/RATE_CLASSES.md,
-first commit 2026-10-14: the class fit as a refinement of the per-species model, a class's derivative
-the sum of its branches', started from the global optimum.
+The rate classes are AleRax's custom parametrization (``--model-parametrization <file>``, AleRax
+``src/ale/OptimizationClasses.cpp``); Huang et al. (Nat Commun 2026) use it for their clade-wise
+models (DTL_br1, DTL_br2). This implementation was ported from RALE (Aleraxv2,
+https://github.com/oliver-schick/RALE, ``docs/notes/RATE_CLASSES.md``).
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ def family_nll(data, theta: torch.Tensor, config: GpurecConfig, pi_iters: int, n
     return nll, model
 
 
-def make_class_objective(model, classes: RateClasses):
+def make_cladewise_objective(model, classes: RateClasses):
     """``x -> (NLL bits, gradient)`` over the concatenated class log2 rates ``[D..., L..., T...]``
     of a specieswise ``model``: the per-species rates are gathered from the classes, and the
     per-species gradient is summed back over each class's branches."""
@@ -90,7 +91,7 @@ def make_class_objective(model, classes: RateClasses):
     return objective
 
 
-def fit_classes(data, classes: RateClasses, *, start_log2_rates, config: GpurecConfig,
+def fit_cladewise(data, classes: RateClasses, *, start_log2_rates, config: GpurecConfig,
                 max_iter=500, ftol=1e-10, gtol=1e-3, maxcor=20,
                 fit_pi=16, fit_neu=16, eval_pi=64, eval_neu=64, verbose=False) -> dict:
     """Fit the class rates from ``start_log2_rates`` (``[3]``: every class of a rate starts there,
@@ -108,7 +109,7 @@ def fit_classes(data, classes: RateClasses, *, start_log2_rates, config: GpurecC
     start = [float(v) for v in torch.as_tensor(start_log2_rates, dtype=torch.float64).reshape(3)]
     x0 = np.concatenate([np.full(counts[k], start[k]) for k in range(3)])
     x0 = np.clip(x0, lo, np.inf if hi is None else hi)
-    class_objective = make_class_objective(model, classes)
+    class_objective = make_cladewise_objective(model, classes)
     n_evaluations = 0
 
     def objective(x):
@@ -122,7 +123,7 @@ def fit_classes(data, classes: RateClasses, *, start_log2_rates, config: GpurecC
         nonlocal steps
         steps += 1
         if verbose:
-            logger.debug("[fit_classes] it=%3d loss=%.6f bits", steps, float(intermediate_result.fun))
+            logger.debug("[fit_cladewise] it=%3d loss=%.6f bits", steps, float(intermediate_result.fun))
 
     result = minimize(
         objective, x0, jac=True, method="L-BFGS-B", bounds=[(lo, hi)] * len(x0), callback=report,
@@ -132,14 +133,14 @@ def fit_classes(data, classes: RateClasses, *, start_log2_rates, config: GpurecC
     class_log2_rates = [part.clone() for part in parts]
     theta_hat = species_log2_rates(classes, class_log2_rates)
     if verbose:
-        logger.info("[fit_classes] %s after %d steps, %d evaluations", result.message, result.nit, n_evaluations)
+        logger.info("[fit_cladewise] %s after %d steps, %d evaluations", result.message, result.nit, n_evaluations)
 
     del model
     torch.cuda.empty_cache()
     nll, eval_model = family_nll(data, theta_hat, config, eval_pi, eval_neu)
     nll = nll.double().cpu()
     return {
-        "mode": "classes", "theta": theta_hat, "class_log2_rates": class_log2_rates,
+        "mode": "cladewise", "theta": theta_hat, "class_log2_rates": class_log2_rates,
         "nll_vector_bits": nll, "nll_bits": float(nll.sum()), "n_steps": int(result.nit),
         "n_evaluations": n_evaluations, "converged": bool(result.success), "message": str(result.message),
         "model": eval_model, "wall_s": time.perf_counter() - t0,

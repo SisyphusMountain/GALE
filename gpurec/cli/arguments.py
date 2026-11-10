@@ -45,8 +45,8 @@ class RunArguments:
     families: Path
     species_tree: Path
     prefix: Path
-    parametrization: str  # "global", "per-family" or "classes"
-    rate_classes_file: Path | None  # the file of a "classes" parametrization
+    parametrization: str  # "global", "per-family" or "cladewise"
+    rate_classes_file: Path | None  # the file of a "cladewise" parametrization
     start_rates: tuple[float, float, float]
     fix_rates: bool
     samples: int
@@ -162,7 +162,7 @@ def parse_arguments(argv: list[str]) -> RunArguments:
         families=Path(args.families),
         species_tree=Path(args.species_tree),
         prefix=Path(args.prefix),
-        parametrization="classes" if rate_classes_file is not None else PARAMETRIZATIONS[args.model_parametrization],
+        parametrization="cladewise" if rate_classes_file is not None else PARAMETRIZATIONS[args.model_parametrization],
         rate_classes_file=rate_classes_file,
         start_rates=(args.d, args.l, args.t),
         fix_rates=args.fix_rates,

@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from gpurec import evaluate, fit, load_families, load_fit_config
-from gpurec.fit.class_fit import make_class_objective
+from gpurec.fit.cladewise_fit import make_cladewise_objective
 from gpurec.io.rate_classes import parse_rate_classes
 
 pytestmark = pytest.mark.gpu
@@ -53,7 +53,7 @@ def test_equal_class_rates_reproduce_the_global_model():
     data, config, classes = _setup()
     rates = (0.1, 0.2, 0.05)
     glob = evaluate(data, "global", rates, config)
-    cls = evaluate(data, "classes", rates, config, classes)
+    cls = evaluate(data, "cladewise", rates, config, classes)
     for name in data.names:
         assert abs(glob.log_likelihoods[name] - cls.log_likelihoods[name]) < 1e-9, name
 
@@ -63,7 +63,7 @@ def test_class_gradient_matches_central_differences():
     data, config, classes = _setup()
     model = data.build_model(list(range(data.n_families)), "specieswise", config.solver, config,
                              config.batching.clade_budget)
-    objective = make_class_objective(model, classes)
+    objective = make_cladewise_objective(model, classes)
     rng = np.random.default_rng(1)
     x = np.log2(rng.uniform(0.05, 0.4, size=sum(classes.counts)))
     _, grad = objective(x)
@@ -76,11 +76,11 @@ def test_class_gradient_matches_central_differences():
         assert abs(fd - grad[i]) / max(1.0, abs(fd)) < 1e-4, (i, grad[i], fd)
 
 
-def test_class_fit_is_at_least_as_good_as_the_global_fit():
+def test_cladewise_fit_is_at_least_as_good_as_the_global_fit():
     _skip_without_cuda()
     data, config, classes = _setup()
     glob = fit(data, "global", (0.1, 0.1, 0.1), config)
-    cls = fit(data, "classes", (0.1, 0.1, 0.1), config, classes)
+    cls = fit(data, "cladewise", (0.1, 0.1, 0.1), config, classes)
     assert sum(cls.log_likelihoods.values()) >= sum(glob.log_likelihoods.values()) - 1e-6
     assert cls.log2_rates.shape == (len(data.species.labels), 3)
 

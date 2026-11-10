@@ -43,7 +43,7 @@ def _log_rates(result) -> None:
     if result.parametrization == "global":
         logger.info("rates: D %s L %s T %s", *(format_number(rates[kind]) for kind in "DLT"))
         return
-    if result.parametrization == "classes":
+    if result.parametrization == "cladewise":
         classes = result.rate_classes
         logger.info("rate classes: %s", ", ".join(f"{count} {kind}" for count, kind in zip(classes.counts, "DLT")))
         for k, kind in enumerate("DLT"):
