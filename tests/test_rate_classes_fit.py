@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from gpurec import evaluate, fit, load_families, load_fit_config
-from gpurec.fit.cladewise_fit import make_cladewise_objective
+from gpurec.fit.cladewise_fit import fit_cladewise, make_cladewise_objective
 from gpurec.io.rate_classes import parse_rate_classes
 
 pytestmark = pytest.mark.gpu
@@ -109,3 +109,13 @@ def test_cli_writes_the_rates_of_every_node(tmp_path):
         for node, label in enumerate(labels):
             per_class.setdefault(written.class_of[kind][node], set()).add(rates[label][kind])
         assert all(len(values) == 1 for values in per_class.values()), kind
+
+
+def test_a_cladewise_fit_that_does_not_converge_raises():
+    _skip_without_cuda()
+    data, config, classes = _setup()
+    config.cladewise.max_iter, config.cladewise.gtol = 1, 1e-12
+    with pytest.raises(RuntimeError, match="did not converge"):
+        fit_cladewise(data, classes, start_log2_rates=torch.tensor([-1.0, -1.0, -1.0], dtype=torch.float64),
+                      config=config, verbose=False)
+

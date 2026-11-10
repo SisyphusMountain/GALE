@@ -283,6 +283,9 @@ its default. The sections that take effect when fitting or evaluating are:
   count as sitting on that edge). `init_rate` is rejected with an error:
   fitting starts from `--d`/`--l`/`--t` (`start_rates` in Python), never
   from `init_rate`.
+- `[cladewise]`: L-BFGS-B over the class rates of a rate-class file
+  (`max_iter`, `ftol`, `gtol`, `maxcor`). A fit that stops on `max_iter`
+  or fails raises an error instead of returning unconverged rates.
 - `[solver]`: settings of the fixed-point and gradient solvers.
   `e_tangent_tol` is rejected with an error: no fit, evaluation or sampling
   step in GALE 0.1 reads it from the config file. `use_hvp_warm_start`
@@ -297,9 +300,10 @@ its default. The sections that take effect when fitting or evaluating are:
     there. These steps compute no gradient, so the keys that change their
     result are `e_max_iter` and `e_tol` (the extinction-probability
     iteration) and `pi_iters` (the reconciliation-probability iteration).
-  - While fitting, the fitting routines choose their own iteration counts:
-    `pi_iters` and `neumann_terms` from the file are replaced by the
-    routines' fixed values (16, and 64 where more accuracy is needed).
+  - While fitting, the GLOBAL and PER-FAMILY routines choose their own
+    iteration counts: `pi_iters` and `neumann_terms` from the file are
+    replaced by the routines' fixed values (16, and 64 where more accuracy
+    is needed). The cladewise fit (a rate-class file) uses them as written.
   - The GLOBAL fit uses every other `[solver]` key as written
     (`warm_adjoint = true` takes effect only when the GPU has room for the
     extra memory it needs).

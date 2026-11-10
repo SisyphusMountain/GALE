@@ -5,9 +5,9 @@ per-species rates of GALE's specieswise mode: branch ``s`` takes the log2 rates 
 ``theta[s] = (x_D[c_D(s)], x_L[c_L(s)], x_T[c_T(s)])``, shared by all families. The objective is the
 total NLL over families; the gradient with respect to a class rate is the sum of the per-species
 gradients over the class's branches (the chain rule of a shared parameter), so the specieswise
-gradient serves unchanged. L-BFGS-B minimises it in the rate box ``config.rates`` at the fit tier
-(``fit_pi``/``fit_neu``); the per-family NLL is then evaluated at the eval tier, as ``fit_global``
-does.
+gradient serves unchanged. L-BFGS-B (``[cladewise]`` of the config) minimises it in the rate box
+``config.rates``, with the forward solves as ``[solver]`` sets them; a fit that does not converge
+raises ``RuntimeError``.
 
 The rate classes are AleRax's custom parametrization (``--model-parametrization <file>``, AleRax
 ``src/ale/OptimizationClasses.cpp``); Huang et al. (Nat Commun 2026) use it for their clade-wise
@@ -26,7 +26,6 @@ from scipy.optimize import minimize
 from gpurec.api._execution import stream_batches, stream_family_nll
 from gpurec.api.model import cuda_device
 from gpurec.config import GpurecConfig
-from gpurec.fit.global_fit import _tier_solver_options
 from gpurec.io.rate_classes import RateClasses
 from gpurec.optimization import log2_rate_bounds
 
@@ -49,19 +48,26 @@ def class_rates(log2_rates: torch.Tensor) -> list[list[float]]:
     return [[2.0 ** value for value in row] for row in log2_rates.double().tolist()]
 
 
-def family_nll(data, theta: torch.Tensor, config: GpurecConfig, pi_iters: int, neumann_terms: int):
+def _specieswise_model(data, config: GpurecConfig):
+    # the forward solves as [solver] sets them: no tier of the fit's own overrides pi_iters or neumann_terms
+    return data.build_model(
+        list(range(data.n_families)), "specieswise", config.solver, config, config.batching.clade_budget,
+    )
+
+
+def family_nll(data, theta: torch.Tensor, config: GpurecConfig):
     """Per-family NLL (bits) at per-species rates ``theta`` ``[S,3]``, and the specieswise model that
     computed it (its ``theta`` set to these rates, for sampling reconciliations)."""
-    model = data.build_model(
-        list(range(data.n_families)), "specieswise", _tier_solver_options(config, pi_iters, neumann_terms),
-        config, config.batching.clade_budget,
-    )
+    return _model_nll(_specieswise_model(data, config), theta, data.n_families)
+
+
+def _model_nll(model, theta: torch.Tensor, n_families: int):
     theta = theta.to(device=model.theta.device, dtype=model.theta.dtype)
     with torch.no_grad():
         model.theta.copy_(theta)
     nll = stream_family_nll(
         model.batch_statics, theta, model.receiver_weights.detach(), model.origination_weights.detach(),
-        n_families=data.n_families,
+        n_families=n_families,
     )
     return nll, model
 
@@ -91,20 +97,17 @@ def make_cladewise_objective(model, classes: RateClasses):
     return objective
 
 
-def fit_cladewise(data, classes: RateClasses, *, start_log2_rates, config: GpurecConfig,
-                max_iter=500, ftol=1e-10, gtol=1e-3, maxcor=20,
-                fit_pi=16, fit_neu=16, eval_pi=64, eval_neu=64, verbose=False) -> dict:
+def fit_cladewise(data, classes: RateClasses, *, start_log2_rates, config: GpurecConfig, verbose: bool) -> dict:
     """Fit the class rates from ``start_log2_rates`` (``[3]``: every class of a rate starts there,
-    typically the global optimum). Returns ``{mode, theta[cpu,S,3], class_log2_rates (list of three
-    cpu tensors), nll_vector_bits[cpu,G], nll_bits, n_steps, n_evaluations, converged, message,
-    model, wall_s}``."""
+    typically the global optimum), with ``[solver]`` for the forward solves and ``[cladewise]`` for
+    L-BFGS-B. Raises ``RuntimeError`` when L-BFGS-B does not converge. Returns ``{mode,
+    theta[cpu,S,3], class_log2_rates (list of three cpu tensors), nll_vector_bits[cpu,G], nll_bits,
+    n_steps, n_evaluations, message, model, wall_s}``."""
     t0 = time.perf_counter()
     lo, hi = log2_rate_bounds(bounds=config.rates)
+    opts = config.cladewise
     cuda_device()  # a clear error without a GPU, before the model is built
-    model = data.build_model(
-        list(range(data.n_families)), "specieswise", _tier_solver_options(config, fit_pi, fit_neu),
-        config, config.batching.clade_budget,
-    )
+    model = _specieswise_model(data, config)
     counts = classes.counts
     start = [float(v) for v in torch.as_tensor(start_log2_rates, dtype=torch.float64).reshape(3)]
     x0 = np.concatenate([np.full(counts[k], start[k]) for k in range(3)])
@@ -127,21 +130,24 @@ def fit_cladewise(data, classes: RateClasses, *, start_log2_rates, config: Gpure
 
     result = minimize(
         objective, x0, jac=True, method="L-BFGS-B", bounds=[(lo, hi)] * len(x0), callback=report,
-        options={"maxiter": int(max_iter), "ftol": float(ftol), "gtol": float(gtol), "maxcor": int(maxcor)},
+        options={"maxiter": opts.max_iter, "ftol": opts.ftol, "gtol": opts.gtol, "maxcor": opts.maxcor},
     )
+    if not result.success:
+        raise RuntimeError(
+            f"cladewise fit did not converge after {result.nit} L-BFGS-B iterations ({n_evaluations} evaluations): "
+            f"{result.message} ([cladewise] max_iter = {opts.max_iter})"
+        )
     parts = torch.split(torch.as_tensor(result.x, dtype=torch.float64), list(counts))
     class_log2_rates = [part.clone() for part in parts]
     theta_hat = species_log2_rates(classes, class_log2_rates)
     if verbose:
         logger.info("[fit_cladewise] %s after %d steps, %d evaluations", result.message, result.nit, n_evaluations)
 
-    del model
-    torch.cuda.empty_cache()
-    nll, eval_model = family_nll(data, theta_hat, config, eval_pi, eval_neu)
+    nll, model = _model_nll(model, theta_hat, data.n_families)
     nll = nll.double().cpu()
     return {
         "mode": "cladewise", "theta": theta_hat, "class_log2_rates": class_log2_rates,
         "nll_vector_bits": nll, "nll_bits": float(nll.sum()), "n_steps": int(result.nit),
-        "n_evaluations": n_evaluations, "converged": bool(result.success), "message": str(result.message),
-        "model": eval_model, "wall_s": time.perf_counter() - t0,
+        "n_evaluations": n_evaluations, "message": str(result.message),
+        "model": model, "wall_s": time.perf_counter() - t0,
     }

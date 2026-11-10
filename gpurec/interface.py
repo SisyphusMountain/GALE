@@ -59,7 +59,7 @@ def _check_parametrization(parametrization: str, classes: RateClasses | None) ->
 
 
 def _class_result(data, classes, theta, config, history, wall_seconds) -> FitResult:
-    nll_bits, model = family_nll(data, theta, config, config.solver.pi_iters, config.solver.neumann_terms)
+    nll_bits, model = family_nll(data, theta, config)
     log_likelihoods = {name: -float(bits) * LN2 for name, bits in zip(data.names, nll_bits.double().cpu())}
     return FitResult(data, "cladewise", theta.double().cpu(), log_likelihoods, model, history, wall_seconds, classes)
 
@@ -100,7 +100,7 @@ def fit(data: FamilyData, parametrization: str, start_rates, config: GpurecConfi
         glob = fit_global(data, start_log2_rates=start, config=config, verbose=True)
         res = fit_cladewise(data, classes, start_log2_rates=glob["theta"], config=config, verbose=True)
         history = {"n_steps_global": glob["n_steps"], "n_steps": res["n_steps"],
-                   "n_evaluations": res["n_evaluations"], "converged": res["converged"], "message": res["message"]}
+                   "n_evaluations": res["n_evaluations"], "message": res["message"]}
         log_likelihoods = {name: -float(bits) * LN2 for name, bits in zip(data.names, res["nll_vector_bits"])}
         return FitResult(data, "cladewise", res["theta"].double().cpu(), log_likelihoods, res["model"], history,
                          time.perf_counter() - t0, classes)

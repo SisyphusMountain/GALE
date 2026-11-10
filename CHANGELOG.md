@@ -9,7 +9,9 @@
   the specieswise mode: it starts every class at the global optimum and refines the class rates with
   L-BFGS-B (a class's gradient is the sum of its branches'); `model_parameters.txt` lists each
   node's rates. Python: parametrization `"cladewise"`, `fit`/`evaluate` take `classes=`,
-  `gpurec.io.rate_classes`, `gpurec.fit.cladewise_fit`.
+  `gpurec.io.rate_classes`, `gpurec.fit.cladewise_fit`. The fit's L-BFGS-B settings are the new `[cladewise]`
+  section; its forward solves use `[solver]` as written; a fit that does not converge raises
+  `RuntimeError`.
 
 ## 1.0 — 2026-11-01
 

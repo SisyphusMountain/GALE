@@ -8,6 +8,7 @@ import torch
 
 from gpurec.api.solver_options import SolverOptions
 from gpurec.config.batching import BatchingOptions
+from gpurec.config.cladewise import CladewiseOptions
 from gpurec.config.memory import MemoryOptions
 from gpurec.config.newton import NewtonOptions
 from gpurec.config.precision import PrecisionOptions
@@ -132,6 +133,7 @@ class GpurecConfig:
     regularizer: PenaltyOptions = field(default_factory=_default_penalty_options)
     memory: MemoryOptions = field(default_factory=MemoryOptions)
     batching: BatchingOptions = field(default_factory=lambda: _defaults_section(BatchingOptions, "batching"))
+    cladewise: CladewiseOptions = field(default_factory=lambda: _defaults_section(CladewiseOptions, "cladewise"))
 
     def validate(self) -> None:
         """Delegate to every sub-option's own ``validate`` (when it defines one)."""
@@ -143,6 +145,7 @@ class GpurecConfig:
             self.regularizer,
             self.memory,
             self.batching,
+            self.cladewise,
         ):
             validate_fn = getattr(sub, "validate", None)
             if callable(validate_fn):

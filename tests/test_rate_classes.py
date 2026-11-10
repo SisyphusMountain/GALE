@@ -101,3 +101,33 @@ def test_every_node_of_a_class_gets_its_class_rate(tmp_path, monkeypatch):
             per_class_api.setdefault(classes.class_of[kind][node], set()).add(result.rates[label][name])
         assert all(len(values) == 1 for values in per_class_file.values()), name
         assert all(len(values) == 1 for values in per_class_api.values()), name
+
+
+def test_cladewise_forward_solves_follow_the_solver_config(monkeypatch):
+    # The fit used to override [solver] pi_iters/neumann_terms with its own tiers (16 and 64).
+    import torch
+
+    from gpurec import load_families, load_fit_config
+    from gpurec.data import FamilyData
+    from gpurec.fit.cladewise_fit import family_nll
+
+    monkeypatch.chdir(Path(__file__).parent / "data" / "release")
+    data = load_families(
+        families=Path("families.txt"), species_tree=Path("species.nwk"), min_covered_species=4,
+        trim_ratio=0.0, max_clade_split_ratio=None, fraction_missing=None, skip_family_filtering=False,
+    )
+    config = load_fit_config(None)
+    config.solver.pi_iters, config.solver.neumann_terms = 128, 96
+    seen = []
+
+    class Stop(Exception):
+        pass
+
+    def build_model(self, indices, mode, solver, *args):
+        seen.append((mode, solver.pi_iters, solver.neumann_terms))
+        raise Stop
+
+    monkeypatch.setattr(FamilyData, "build_model", build_model)
+    with pytest.raises(Stop):
+        family_nll(data, torch.zeros(len(data.species.labels), 3, dtype=torch.float64), config)
+    assert seen == [("specieswise", 128, 96)]
