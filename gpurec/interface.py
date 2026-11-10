@@ -10,11 +10,13 @@ import torch
 from gpurec.api.model import GeneReconModel
 from gpurec.config import GpurecConfig
 from gpurec.data import FamilyData
+from gpurec.fit.cladewise_fit import class_rates, family_nll, fit_cladewise, species_log2_rates
 from gpurec.fit.genewise_fit import fit_genewise
 from gpurec.fit.global_fit import fit_global
+from gpurec.io.rate_classes import RateClasses
 
 LN2 = math.log(2.0)
-PARAMETRIZATIONS = ("global", "per-family")
+PARAMETRIZATIONS = ("global", "per-family", "cladewise")
 
 
 @dataclass(frozen=True)
@@ -26,9 +28,13 @@ class FitResult:
     model: GeneReconModel
     history: dict | None
     wall_seconds: float
+    rate_classes: RateClasses | None = None  # the classes of a "cladewise" fit; log2_rates is then [S,3]
 
     @property
     def rates(self) -> dict:
+        if self.parametrization == "cladewise":
+            labels = self.data.species.labels
+            return {labels[node]: dict(zip("DLT", row)) for node, row in enumerate(class_rates(self.log2_rates))}
         values = torch.exp2(self.log2_rates.double())
         if self.parametrization == "global":
             return {"D": float(values[0, 0]), "L": float(values[0, 1]), "T": float(values[0, 2])}
@@ -45,9 +51,17 @@ def _log2_rates(rates) -> torch.Tensor:
     return torch.log2(torch.tensor(values, dtype=torch.float64))
 
 
-def _check_parametrization(parametrization: str) -> None:
+def _check_parametrization(parametrization: str, classes: RateClasses | None) -> None:
     if parametrization not in PARAMETRIZATIONS:
         raise ValueError(f"parametrization must be one of {PARAMETRIZATIONS}, got {parametrization!r}")
+    if (parametrization == "cladewise") != (classes is not None):
+        raise ValueError("the rate classes are given exactly when the parametrization is 'cladewise'")
+
+
+def _class_result(data, classes, theta, config, history, wall_seconds) -> FitResult:
+    nll_bits, model = family_nll(data, theta, config)
+    log_likelihoods = {name: -float(bits) * LN2 for name, bits in zip(data.names, nll_bits.double().cpu())}
+    return FitResult(data, "cladewise", theta.double().cpu(), log_likelihoods, model, history, wall_seconds, classes)
 
 
 def _result(data, parametrization, log2_rates, config, history, wall_seconds) -> FitResult:
@@ -62,18 +76,34 @@ def _result(data, parametrization, log2_rates, config, history, wall_seconds) ->
     return FitResult(data, parametrization, log2_rates.double().cpu(), log_likelihoods, model, history, wall_seconds)
 
 
-def evaluate(data: FamilyData, parametrization: str, rates, config: GpurecConfig) -> FitResult:
-    _check_parametrization(parametrization)
+def evaluate(data: FamilyData, parametrization: str, rates, config: GpurecConfig,
+             classes: RateClasses | None = None) -> FitResult:
+    _check_parametrization(parametrization, classes)
     start = time.perf_counter()
+    if parametrization == "cladewise":
+        log2 = _log2_rates(rates)
+        theta = species_log2_rates(classes, [log2[k].expand(classes.counts[k]).clone() for k in range(3)])
+        result = _class_result(data, classes, theta, config, None, 0.0)
+        return replace(result, wall_seconds=time.perf_counter() - start)
     log2_rates = _log2_rates(rates).reshape(1, 3).expand(data.n_families, 3).clone()
     result = _result(data, parametrization, log2_rates, config, None, 0.0)
     return replace(result, wall_seconds=time.perf_counter() - start)
 
 
-def fit(data: FamilyData, parametrization: str, start_rates, config: GpurecConfig) -> FitResult:
-    _check_parametrization(parametrization)
+def fit(data: FamilyData, parametrization: str, start_rates, config: GpurecConfig,
+        classes: RateClasses | None = None) -> FitResult:
+    _check_parametrization(parametrization, classes)
     start = _log2_rates(start_rates)
     t0 = time.perf_counter()
+    if parametrization == "cladewise":
+        # The class fit refines the global optimum, where every class starts.
+        glob = fit_global(data, start_log2_rates=start, config=config, verbose=True)
+        res = fit_cladewise(data, classes, start_log2_rates=glob["theta"], config=config, verbose=True)
+        history = {"n_steps_global": glob["n_steps"], "n_steps": res["n_steps"],
+                   "n_evaluations": res["n_evaluations"], "message": res["message"]}
+        log_likelihoods = {name: -float(bits) * LN2 for name, bits in zip(data.names, res["nll_vector_bits"])}
+        return FitResult(data, "cladewise", res["theta"].double().cpu(), log_likelihoods, res["model"], history,
+                         time.perf_counter() - t0, classes)
     if parametrization == "global":
         res = fit_global(data, start_log2_rates=start, config=config, verbose=True)
         log2_rates = res["theta"].double().reshape(1, 3).expand(data.n_families, 3).clone()

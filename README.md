@@ -84,7 +84,7 @@ AleRax's.
 | `-f/--families FILE` | required | families file (see "Families file" below) |
 | `-s/--species-tree FILE` | required | Newick file; AleRax's named-tree options (`Random`, `MiniNJ`, ...) are rejected |
 | `-p/--prefix DIR` | `alerax_output` | output folder; refused, before any work, if it already holds results of an earlier run (see below) |
-| `--model-parametrization` | `GLOBAL` | `GLOBAL` or `PER-FAMILY` |
+| `--model-parametrization` | `GLOBAL` | `GLOBAL`, `PER-FAMILY`, or a rate-class file (see "Rate classes" below) |
 | `--d`, `--l`, `--t` | 0.1 each, must be > 0 | starting rates, or the rates used with `--fix-rates` |
 | `--fix-rates` | off | evaluate likelihoods only |
 | `-g/--gene-tree-samples N` | 100 | samples per family; 0 = no sampling |
@@ -171,6 +171,17 @@ names without extension, and duplicate names are an error.
   `x*(2*leaves-3) >= clades`.
 - Dropped families appear in no output file; they are listed in the log.
 
+## Rate classes
+
+`--model-parametrization <file>` takes AleRax's custom parametrization: one duplication, loss and
+transfer rate per class of species branches. The file has one line per group,
+`<node label> <types>`, for example `Asgard DLT` or `DPANN D`. Each letter (D, L or T) starts a new
+class of that rate at the node, inherited by its whole subtree unless a descendant line starts
+another; the three rates are independent, the root's class is the global one (a line naming the
+root is skipped), and labels are the species tree's AleRax labels. Origination classes (`O`) are
+not supported. The fit starts every class at the global optimum and refines the class rates with
+L-BFGS-B; with `--fix-rates` every class takes `--d`, `--l` and `--t`.
+
 ## Output files
 
 Written under the folder given by `-p/--prefix`. Unless stated, names,
@@ -196,6 +207,8 @@ post-order. These names are used in every file.
   one row per species node (2n-1 rows) in AleRax node order.
 - `PER-FAMILY`: `model_parameters/<family>_rates.txt`, line 1 `D L T`,
   line 2 the three rates.
+- Rate classes: `model_parameters/model_parameters.txt` as for `GLOBAL`, each
+  node with the rates of its classes.
 
 ### Other files
 
@@ -204,7 +217,8 @@ post-order. These names are used in every file.
 - `gale.log`: the full command line, GALE version, GPU name, filtering
   messages, optimizer progress, the rates (GLOBAL: one line; PER-FAMILY:
   the smallest and largest value of each rate, and one line per family
-  with `--verbose-opt`), Python warnings, timings.
+  with `--verbose-opt`; rate classes: one line per class), Python warnings,
+  timings.
 
 ### Reconciliation samples (`-g N`, N > 0)
 
@@ -269,6 +283,9 @@ its default. The sections that take effect when fitting or evaluating are:
   count as sitting on that edge). `init_rate` is rejected with an error:
   fitting starts from `--d`/`--l`/`--t` (`start_rates` in Python), never
   from `init_rate`.
+- `[cladewise]`: L-BFGS-B over the class rates of a rate-class file
+  (`max_iter`, `ftol`, `gtol`, `maxcor`). A fit that stops on `max_iter`
+  or fails raises an error instead of returning unconverged rates.
 - `[solver]`: settings of the fixed-point and gradient solvers.
   `e_tangent_tol` is rejected with an error: no fit, evaluation or sampling
   step in GALE 0.1 reads it from the config file. `use_hvp_warm_start`
@@ -283,9 +300,10 @@ its default. The sections that take effect when fitting or evaluating are:
     there. These steps compute no gradient, so the keys that change their
     result are `e_max_iter` and `e_tol` (the extinction-probability
     iteration) and `pi_iters` (the reconciliation-probability iteration).
-  - While fitting, the fitting routines choose their own iteration counts:
-    `pi_iters` and `neumann_terms` from the file are replaced by the
-    routines' fixed values (16, and 64 where more accuracy is needed).
+  - While fitting, the GLOBAL and PER-FAMILY routines choose their own
+    iteration counts: `pi_iters` and `neumann_terms` from the file are
+    replaced by the routines' fixed values (16, and 64 where more accuracy
+    is needed). The cladewise fit (a rate-class file) uses them as written.
   - The GLOBAL fit uses every other `[solver]` key as written
     (`warm_adjoint = true` takes effect only when the GPU has room for the
     extra memory it needs).

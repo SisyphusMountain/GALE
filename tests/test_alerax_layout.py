@@ -78,9 +78,13 @@ def test_likelihood_file_layout(ours):
 
 def test_coverage_is_identical(ours):
     def parse(path):
-        return [(line.split()[0], float(line.split()[1])) for line in path.read_text().splitlines()]
+        rows = [line.split() for line in path.read_text().splitlines()]
+        return [row[0] for row in rows], [float(row[1]) for row in rows]
 
-    assert parse(ours / "perSpeciesCoverage.txt") == pytest.approx(parse(REFERENCE / "perSpeciesCoverage.txt"))
+    (my_names, my_values), (names, values) = (parse(ours / "perSpeciesCoverage.txt"),
+                                              parse(REFERENCE / "perSpeciesCoverage.txt"))
+    assert my_names == names
+    assert my_values == pytest.approx(values)
 
 
 def test_recphyloxml_structure(ours):

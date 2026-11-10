@@ -43,6 +43,13 @@ def _log_rates(result) -> None:
     if result.parametrization == "global":
         logger.info("rates: D %s L %s T %s", *(format_number(rates[kind]) for kind in "DLT"))
         return
+    if result.parametrization == "cladewise":
+        classes = result.rate_classes
+        logger.info("rate classes: %s", ", ".join(f"{count} {kind}" for count, kind in zip(classes.counts, "DLT")))
+        for k, kind in enumerate("DLT"):
+            for label in classes.starts[k]:
+                logger.info("%s from %s: %s", kind, label, format_number(rates[label][kind]))
+        return
     ranges = ", ".join(
         f"{kind} from {format_number(min(r[kind] for r in rates.values()))} "
         f"to {format_number(max(r[kind] for r in rates.values()))}"
@@ -78,6 +85,7 @@ def main(argv: list[str]) -> int:
         import torch
 
         from gpurec import cuda_device, evaluate, fit, load_families, load_fit_config, write_alerax
+        from gpurec.io.rate_classes import read_rate_classes
         from gpurec.io.alerax_output import ReconciliationWriter
         from gpurec.reconciliation.sampling import iter_family_reconciliations
 
@@ -100,10 +108,13 @@ def main(argv: list[str]) -> int:
             fraction_missing=args.fraction_missing_file,
             skip_family_filtering=args.skip_family_filtering,
         )
+        extra = {}  # the rate classes, for a rate-class file
+        if args.rate_classes_file is not None:
+            extra["classes"] = read_rate_classes(args.rate_classes_file, data.species)
         if args.fix_rates:
-            result = evaluate(data, args.parametrization, args.start_rates, config)
+            result = evaluate(data, args.parametrization, args.start_rates, config, **extra)
         else:
-            result = fit(data, args.parametrization, args.start_rates, config)
+            result = fit(data, args.parametrization, args.start_rates, config, **extra)
         _log_rates(result)
         logger.info("total log-likelihood: %s", sum(result.log_likelihoods.values()))
         write_alerax(result, None, args.prefix)

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Cladewise rates: `--model-parametrization <file>` takes AleRax's custom parametrization (lines
+  `<node label> <types>`), one duplication, loss and transfer rate per class of species branches,
+  as Huang et al. (Nat Commun 2026) used for their clade-wise models. The fit is a specialisation of
+  the specieswise mode: it starts every class at the global optimum and refines the class rates with
+  L-BFGS-B (a class's gradient is the sum of its branches'); `model_parameters.txt` lists each
+  node's rates. Python: parametrization `"cladewise"`, `fit`/`evaluate` take `classes=`,
+  `gpurec.io.rate_classes`, `gpurec.fit.cladewise_fit`. The fit's L-BFGS-B settings are the new `[cladewise]`
+  section; its forward solves use `[solver]` as written; a fit that does not converge raises
+  `RuntimeError`.
+
 ## 1.0 — 2026-11-01
 
 First release. Based on the development state of 4 August 2026 (commit 27cdc472). The tag `1.0`
