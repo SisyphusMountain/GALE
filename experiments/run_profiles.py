@@ -18,7 +18,7 @@ Parts:
                            (analysis/callgrind_calls.py)
 usage: run_profiles.py PATHS_TOML PART"""
 from common import (COMMON_OPTIONS, alerax_fit_arguments, gpurec_command, gpurec_fit_arguments, hogenom_families_file,
-                    hogenom_species_tree, log_progress, output_dir, run_logged, run_part, run_timed)
+                    hogenom_species_tree, log_progress, mpiexec, output_dir, run_logged, run_part, run_timed)
 
 
 def gpurec_nsys(paths):
@@ -41,7 +41,7 @@ def gpurec_nsys(paths):
 
 def callgrind(paths, folder, name, list_name, arguments):
     """AleRax as released on one process under callgrind; instruction counts in NAME.callgrind.out."""
-    command = [paths["tools"]["mpiexec"], "-np", "1", paths["tools"]["valgrind"], "--tool=callgrind",
+    command = mpiexec(paths) + ["-np", "1", paths["tools"]["valgrind"], "--tool=callgrind",
                f"--callgrind-out-file={folder / (name + '.callgrind.out')}", paths["alerax"]["released"],
                "-f", hogenom_families_file(paths, list_name), "-p", f"out_{name}"] + arguments
     log_progress(folder / "progress.txt", f"{name}: start")
@@ -53,7 +53,7 @@ def alerax_callgrind(paths):
     folder = output_dir(paths, "profiles")
     fit = alerax_fit_arguments(hogenom_families_file(paths, "profile_median_family"), hogenom_species_tree(paths), [])
     log_progress(folder / "progress.txt", "alerax_plain: start")
-    code = run_timed(paths, [paths["tools"]["mpiexec"], "-np", "1", paths["alerax"]["released"], "-p", "out_alerax_plain"] + fit,
+    code = run_timed(paths, mpiexec(paths) + ["-np", "1", paths["alerax"]["released"], "-p", "out_alerax_plain"] + fit,
                      folder / "alerax_plain.time", folder / "alerax_plain.log", folder / "alerax_plain.err", folder)
     log_progress(folder / "progress.txt", f"alerax_plain: exit={code}")
     callgrind(paths, folder, "alerax", "profile_median_family", fit[2:])

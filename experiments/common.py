@@ -123,11 +123,19 @@ def gpurec_command(wrapper, wrapper_arguments, gpurec_arguments):
             + [str(a) for a in gpurec_arguments])
 
 
+def mpiexec(paths):
+    """The MPI launcher and its options ([tools] mpiexec of paths.toml), as a list."""
+    launcher = paths["tools"]["mpiexec"]
+    if not isinstance(launcher, list):
+        raise ValueError(f"[tools] mpiexec must be a list (for instance [\"mpiexec\"]), got {launcher!r}")
+    return list(launcher)
+
+
 def alerax_command(paths, build, ranks, arguments):
     """The command that runs one AleRax build (a key of [alerax] in paths.toml) on RANKS MPI processes, inside the
     memory cap of paths.toml (AleRax holds all its families in memory; the cap stops it alone if it grows too large)."""
-    return (list(paths["tools"]["alerax_memory_cap"]) + [paths["tools"]["mpiexec"], "-np", str(ranks),
-                                                          paths["alerax"][build]] + [str(a) for a in arguments])
+    return (list(paths["tools"]["alerax_memory_cap"]) + mpiexec(paths)
+            + ["-np", str(ranks), paths["alerax"][build]] + [str(a) for a in arguments])
 
 
 def triton_cache_entries(paths):

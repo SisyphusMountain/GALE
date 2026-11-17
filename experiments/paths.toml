@@ -21,7 +21,9 @@ four = "/ABSOLUTE/PATH/TO/alerax_four/build/bin/alerax"
 [tools]
 # GNU time, which records the wall time and the peak memory of a command (the option -v).
 time = "/usr/bin/time"
-mpiexec = "mpiexec"
+# The MPI launcher and its options, as a list. Inside a Slurm job that books N CPUs as one task, Open MPI sees one
+# slot and refuses -np N; ["mpiexec", "--map-by", ":OVERSUBSCRIBE"] lets it start N ranks on those CPUs.
+mpiexec = ["mpiexec"]
 # Placed before every AleRax command: a memory cap, so that an AleRax run that outgrows the machine's memory is
 # stopped alone. The paper's runs used systemd-run with a cap between 80 and 115 GB. Use [] for no cap.
 alerax_memory_cap = ["systemd-run", "--user", "--scope", "-q", "-p", "MemoryMax=100G"]
