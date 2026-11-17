@@ -3,7 +3,8 @@ iterations of the clade values (K), the extinction values iterated to their tole
 terms of the adjoint series, no warm start. Used to score the rates fitted by AleRax and by gpurec with the same
 evaluation (in double precision in the paper).
 usage: eval_at_rates.py FAMILIES_FILE SPECIES_TREE FRACTION_MISSING TOML RATES OUT_FILE
-FRACTION_MISSING: a file of missing fractions per species (archaeal families), or the word none.
+FRACTION_MISSING: a file of missing fractions per species (archaeal families), or the word none. With a file, the
+values include the factor 1 - m of each observed gene, as gale and AleRax 1.5.0 report them.
 RATES: one line per family, "name D L T" (for instance AleRax's fitted rates). OUT_FILE: one line per family,
 "name log-likelihood"."""
 import math
@@ -31,7 +32,9 @@ for line in open(RATES):
 assert set(rates) == set(data.names), "rates file and family file name different families"
 theta = torch.tensor([rates[name] for name in data.names], dtype=model.theta.dtype, device=model.theta.device)
 out = model.genewise_loss_vector_and_grad(theta=theta, need_grad=False)
-ll = -out[0].double().cpu() * math.log(2.0)
+# The probability of the observed genes, as gale reports it (gpurec/interface.py _reported_log_likelihoods): the
+# passes' likelihood times the product of 1 - m over each family's genes (zero in bits without missing fractions).
+ll = (-out[0].double().cpu() + model.observed_gene_log2_factors().cpu()) * math.log(2.0)
 with open(OUT, "w") as f:
     for name, v in zip(data.names, ll.tolist()):
         f.write(f"{name} {v!r}\n")
