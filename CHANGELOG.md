@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Changed
+- **The package version is 1.0.1.** `pyproject.toml` still said 0.1.0 in the 1.0 release, so `gale` wrote
+  "GALE 0.1.0" at the top of its log and run records did not name the release they ran.
 - **With a fraction-missing file, the reported log-likelihoods are those of the observed genes.** A
   gene observed on a leaf species missing a fraction `m` of its genes is observed with probability
   `1 - m`; the per-family log-likelihoods (`per_fam_likelihoods.txt`, `FitResult.log_likelihoods`)
