@@ -142,6 +142,10 @@ def load_families(
     """Read gene families and apply AleRax 1.4.0's family filtering, in AleRax's order."""
     if not 0.0 <= trim_ratio < 1.0:
         raise ValueError(f"trim_ratio must be at least 0 and less than 1, got {trim_ratio}")
+    if max_clade_split_ratio is not None and not max_clade_split_ratio > 0.0:
+        # AleRax's command line takes a value of 0 or less to mean no limit; here no limit is None, and a
+        # ratio of 0 or less would drop every family
+        raise ValueError(f"max_clade_split_ratio must be above 0, or None for no limit, got {max_clade_split_ratio}")
     species_path = Path(species_tree)
     entries = _family_entries(families)
     dropped: list[tuple[str, str]] = []

@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+- **`load_families` refuses a `max_clade_split_ratio` of 0 or less.** It used to take it as a limit and drop
+  every family ("no gene family is left after filtering"); AleRax's convention, where such a value on the
+  command line means no limit, is the CLI's (it passes `None`), and `None` is the way to ask for no limit.
 - **The package version is 1.0.1.** `pyproject.toml` still said 0.1.0 in the 1.0 release, so `gale` wrote
   "GALE 0.1.0" at the top of its log and run records did not name the release they ran.
 - **With a fraction-missing file, the reported log-likelihoods are those of the observed genes.** A
