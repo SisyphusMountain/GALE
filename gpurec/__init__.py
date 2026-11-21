@@ -7,3 +7,4 @@ from gpurec.interface import FitResult, evaluate, fit
 from gpurec.io.alerax_output import write_alerax
 from gpurec.optimization import clamp_log_rate_, log2_rate_bounds, project_rate_gradient_
 from gpurec.reconciliation.tree import ReconciledGeneTree
+from gpurec.simulate import Simulation, simulate_families

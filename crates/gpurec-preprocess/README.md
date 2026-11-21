@@ -10,8 +10,8 @@ constructs wave layouts used by later tensor kernels.
 - `Cargo.toml`: crate manifest, Python extension configuration, and Rust
   dependency list.
 - `Cargo.lock`: pinned dependency versions for reproducible crate builds.
-- `src/lib.rs`: Python module entry point. Exposes `preprocess_dataset` and
-  `plan_batch_layouts`, parses Newick trees, builds species/family JSON output,
+- `src/lib.rs`: Python module entry point. Exposes `preprocess_dataset`,
+  `plan_batch_layouts` and `species_payload`, parses Newick trees, builds species/family JSON output,
   and connects batching, scheduling, and layout planning.
 - `src/batch_planning.rs`: family batching strategies. Validates batch inputs
   and implements sequential, clade-first-fit, and depth-first-fit packing.

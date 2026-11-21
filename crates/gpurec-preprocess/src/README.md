@@ -7,7 +7,8 @@ scheduling layer converts to tensors.
 ## Files
 
 - `lib.rs`: PyO3 module entry point and dataset parser. It exposes
-  `preprocess_dataset` and `plan_batch_layouts`, reads Newick inputs, builds
+  `preprocess_dataset`, `plan_batch_layouts` and `species_payload` (the
+  species-tree arrays of a species tree file alone), reads Newick inputs, builds
   species topology arrays, constructs clade/split data for each family, and
   joins batching plus layout planning into the returned JSON.
 - `batch_planning.rs`: family batching logic. It validates batch constraints and

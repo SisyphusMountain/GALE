@@ -255,6 +255,172 @@ does not grow with the number of families.
 - Not written: `ccps/`, `checkpoint/`, `alerax.log` (replaced by
   `gale.log`), `perSpeciesMissing.txt`, `.alerec`, `consensus_50.newick`.
 
+## Simulating gene families
+
+GALE can draw gene families from its own model, with their true history, in
+files GALE reads back directly. The simulation runs in Rust
+(`crates/gpurec-backtrack/src/simulate.rs`) on the CPU; it needs no GPU.
+
+### The model simulated
+
+The model GALE's likelihood computes:
+
+- **Where a family starts.** One gene copy, on a branch given by
+  `origination`: `"uniform"` (command line `UNIFORM`), every branch of the
+  species tree equally likely, leaf branches, internal branches and the
+  root branch, which is the start GALE's likelihood assumes; or `"root"`
+  (`ROOT`), always the root branch, as AleRax's `--origination ROOT`.
+  GALE's likelihood does not implement the root start (`--origination`
+  takes only `UNIFORM`): `ROOT` is for comparisons with AleRax, and GALE
+  cannot fit such families under the start they were made with.
+- **What one copy does.** A copy on branch e undergoes one event, with
+  probabilities proportional to 1 (speciation), D (duplication), L (loss)
+  and T (transfer), the rates of branch e (relative to speciation, as
+  GALE's rates). A speciation sends one copy to each child branch; on a
+  leaf branch it makes a sampled gene. A duplication leaves two copies on
+  e. A transfer leaves one copy on e and sends one to a branch that is
+  neither e nor an ancestor of e, each such branch chosen with probability
+  proportional to e to the power of its receiver weight (natural-log
+  weights; all zero: every such branch equally likely, which is what GALE's
+  likelihood assumes). A loss ends the copy. Each new copy then undergoes
+  its own event.
+- **What is kept.** The gene tree is the history with every lineage that
+  leaves no gene removed. GALE's likelihood is the probability of a gene
+  tree given that the family leaves at least one gene, so a family that
+  leaves none is drawn again; the number of such attempts is reported.
+- **Not simulated:** missing genes (GALE's fraction-missing files).
+
+The rates can be one triple for every branch (GALE's global rates), one per
+branch (per-species rates) or one per family (per-family rates). Branches
+are numbered and named as GALE numbers and names them (AleRax's node names,
+`Node_<leaf>_<leaf>_<k>` for an unnamed internal node), so the
+`model_parameters.txt` of a GALE run applies directly and the output feeds
+straight back into GALE.
+
+**What GALE can fit of it.** GALE fits global or per-family rates, with
+every receiver weight equal, the uniform start, and families that leave at
+least one gene (a minimum gene count of 1). Families simulated with
+per-species rates, unequal receiver weights, the root start or a larger
+minimum are not of a model GALE fits. GALE reads every gene tree as
+unrooted (`--gene-tree-rooting UNIFORM`), so it fits the simulated gene
+trees without their root: the likelihood is then that of the unrooted
+trees, still the right one for the model simulated.
+
+**Checks** (`tests/test_simulate.py`). On species trees of 2 and 3 leaves,
+200,000 simulated families per case (global rates, high transfer and loss,
+per-branch rates with unequal receiver weights, uniform and root starts),
+the frequency of each unrooted gene tree is compared with GALE's own
+likelihood of it (GPU, float64; per-branch rates, receiver weights and the
+root start are set on GALE's model directly, since its fit has none of
+them); GALE's global fit on 1,000 simulated families finds the simulated
+rates within the standard errors given by the curvature of its
+likelihood; the share of attempts that leave no gene equals the extinction
+probability; and the mean events per branch and the family sizes agree
+with those of an earlier simulator written independently in Python.
+
+### Python
+
+```python
+import gpurec
+
+sim = gpurec.simulate_families(
+    "species.nwk",
+    (0.2, 0.3, 0.1),          # (D, L, T) of every branch; or {branch: (D, L, T)}; or a list, one per family
+    "uniform",                # receiver weights; or {branch: natural-log weight} for every branch
+    "uniform",                # origination: every branch equally likely
+    1000,                     # families kept (each leaves at least one gene)
+    1,                        # seed
+    1_000_000,                # copy cap (below)
+    1,                        # fewest genes a kept family leaves (below)
+    8,                        # threads (the output does not depend on them)
+)
+family = sim.families[0]
+family.newick                 # gene tree, genes named <species>_<k>
+family.gene_species           # {gene: species}
+family.reconciliation         # true reconciliation, a gpurec.ReconciledGeneTree
+family.event_counts           # visible events per branch, columns of AleRax's speciesEventCounts
+family.history                # every event of the whole history, lost copies included
+sim.attempts_without_gene     # attempts drawn again because they left no gene
+sim.attempts_too_few_genes    # attempts drawn again because they left fewer genes than the minimum
+sim.write("simulated")        # the folder below
+```
+
+For many families at once, `gpurec.simulate.simulate_family_arrays(...)`
+takes the same arguments plus `event_counts` (`True` or `False`, required)
+and returns flat arrays instead of objects, with no Python object per node:
+`node_offsets`, `parent`, `children`, `branch`, `event`, `gene`,
+`gene_offsets`, `gene_names`, `newick`, `history`, `attempts_without_gene`,
+`attempts_over_cap`, `attempts_too_few_genes` and `event_counts`
+(`[family, species, 9]`, or None). The layout is in the docstring of
+`gpurec.simulate.FamilyArrays`.
+
+Every argument is required. The true reconciliation is the one GALE's
+sampler would show: each gene node's event (speciation, duplication,
+transfer, leaf) and branch, the receiver of each transfer, and the
+speciations and transfers that lost a copy (the steps that stay on their
+branch, a duplication or a transfer whose other copy left no gene, are not
+shown, as in GALE's samples). `gpurec.reconciliation.files.recphyloxml_text`
+writes it. The visible event counts are counted as GALE counts a sampled
+reconciliation (`gpurec.reconciliation.files.species_event_counts`).
+
+**The copy cap.** Where a branch's duplication rate exceeds one plus its
+loss rate, a family can grow without end. An attempt whose history reaches
+the cap is drawn again and counted (`sim.attempts_over_cap`); when that
+count is not zero, the families are those of the model under the condition
+that they stay below the cap, not exactly those of the model. A family for
+which a million attempts in a row leave no gene, reach the cap or leave too
+few genes stops the run with an error.
+
+**The minimum gene count.** An attempt that leaves some genes but fewer
+than the minimum is drawn again and counted (`sim.attempts_too_few_genes`).
+A minimum of 1 keeps every family that leaves a gene: that is the model
+GALE's likelihood (and AleRax's) fits. A larger minimum is for programs
+that cannot read small families (AleRax stops on families of one or two
+genes); the families are then those of the model under the condition that
+they leave at least that many genes, which neither likelihood knows, so the
+rates fitted to them are biased.
+
+**Reproducibility.** Family i draws from its own random generator, seeded
+by the seed and i, so the same seed gives the same families for any number
+of threads.
+
+### Command line
+
+Every option is required:
+
+```bash
+gale simulate --species-tree species.nwk --rates 0.2 0.3 0.1 --receiver-weights UNIFORM \
+    --origination UNIFORM --families 1000 --seed 1 --max-copies 1000000 --min-genes 1 --threads 8 \
+    --out simulated
+gale -f simulated/families.txt -s simulated/species_tree.newick -p fit --min-covered-species 1
+```
+
+`--min-covered-species 1` keeps the simulated families of one, two and
+three species, which the default (4, AleRax's) would drop, and fitting
+without them biases the rates.
+
+`--rates-file model_parameters/model_parameters.txt` (GALE's output for
+GLOBAL rates, header `node D L T`) replaces `--rates`; `--receiver-weights`
+also takes a file with header `node weight` and one natural-log weight per
+branch. Per-family rates are given in Python. The output folder must be
+new or empty and holds:
+
+- `species_tree.newick`: the species tree as given;
+- `families.txt`: the families, in AleRax's families-file format (absolute
+  paths);
+- `gene_trees/<family>.newick`: the true gene tree, rooted (GALE reads it
+  as unrooted);
+- `mappings/<family>.link`: `gene species` lines;
+- `reconciliations/<family>.xml`: the true reconciliation, in RecPhyloXML
+  as GALE writes its samples;
+- `event_counts/<family>_speciesEventCounts.txt`: its visible events per
+  branch, in the format of GALE's per-sample `speciesEventCounts` files;
+- `history_counts.tsv`: per family, every event of the whole history
+  (speciations on internal branches, duplications, losses, transfers,
+  genes), lost copies included;
+- `settings.json`: the settings and the seed, the attempts drawn again, and
+  GALE's version.
+
 ## Configuration
 
 `--config file.toml` (command line) or `gpurec.load_fit_config(path)`

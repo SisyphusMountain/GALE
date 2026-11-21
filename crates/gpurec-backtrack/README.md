@@ -10,6 +10,8 @@ backtracking without copying the main tensor inputs.
 - `Cargo.toml`: crate manifest, Python extension configuration, and Rust
   dependency list.
 - `Cargo.lock`: pinned dependency versions for reproducible crate builds.
+- `src/simulate.rs`: the gene-family simulator, exposed as `simulate_arrays`
+  (`gpurec.simulate`).
 - `src/lib.rs`: Python module entry point. Exposes
   `sample_reconciliations_torch`, defines the sampling input views, species
   topology helpers, weighted log-space sampling, and event expansion logic for

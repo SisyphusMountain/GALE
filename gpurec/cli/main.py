@@ -54,6 +54,10 @@ def _log_rates(result) -> None:
 
 
 def main(argv: list[str]) -> int:
+    if argv[:1] == ["simulate"]:
+        from gpurec.cli.simulate import main as simulate
+
+        return simulate(argv[1:])
     try:
         args = parse_arguments(argv)
     except UsageError as error:

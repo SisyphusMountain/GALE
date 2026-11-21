@@ -28,6 +28,7 @@ tests/data/*
 !tests/data/archaea60/
 !tests/data/species_labels/
 !tests/data/release/
+!tests/data/frozen/
 
 *.ipynb
 

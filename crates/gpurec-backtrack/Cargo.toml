@@ -10,3 +10,4 @@ crate-type = ["cdylib"]
 numpy = "0.22"
 pyo3 = { version = "0.22", features = ["abi3-py310", "extension-module"] }
 rand = "0.8"
+rayon = "1"

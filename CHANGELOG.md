@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Added
+- **A gene-family simulator: `gale simulate` and `gpurec.simulate_families`.** It draws families from
+  GALE's undated duplication-transfer-loss model (in Rust, on the CPU, `crates/gpurec-backtrack/src/simulate.rs`)
+  and writes them in a folder GALE reads back directly: gene trees, gene-to-species mappings, and each
+  family's true reconciliation (RecPhyloXML, as GALE writes its samples), its visible events per branch
+  and every event of its whole history. Rates global, per species or per family; receiver weights;
+  start on any branch equally likely or always on the root branch; a cap on the gene copies of a history
+  and a minimum number of genes per family, both with the attempts drawn again counted. The same seed
+  gives the same families for any number of threads. Every option is required (README, "Simulating gene
+  families"). GALE fits what it makes with global or per-family rates, equal receiver weights, the
+  uniform start and a minimum of 1 gene; per-species rates, unequal receiver weights, the root start
+  (GALE's `--origination` takes only `UNIFORM`) and a larger minimum are offered for other programs,
+  such as AleRax. `gpurec-preprocess` gains `species_payload` (the species-tree arrays of a species
+  tree file alone), which the simulator reads its species tree with.
+  Checks (`tests/test_simulate.py`): the frequency of each unrooted gene tree against GALE's
+  likelihood of it (GPU), the rates GALE's fit recovers (GPU), the share of attempts that leave no gene
+  against the extinction probability, and agreement with an earlier simulator written independently
+  in Python.
+
 ### Changed
 - **`load_families` refuses a `max_clade_split_ratio` of 0 or less.** It used to take it as a limit and drop
   every family ("no gene family is left after filtering"); AleRax's convention, where such a value on the

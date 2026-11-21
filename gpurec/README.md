@@ -31,6 +31,9 @@ helpers, and Triton kernels.
 - `ReconciledGeneTree`: one sampled reconciliation, with per-node gene name
   (leaves), species label and event; used by the RecPhyloXML/Newick/counts
   writers.
+- `simulate_families`: draw gene families from GALE's model, with their true
+  reconciliations, returning a `Simulation` (`.write(folder)` writes files
+  GALE reads); see the top-level README, "Simulating gene families".
 - `cuda_device`: checks that a CUDA GPU is available and returns it, or
   raises a clear error.
 - `log2_rate_bounds`, `project_rate_gradient_`, `clamp_log_rate_`: rate-box
@@ -43,7 +46,11 @@ helpers, and Triton kernels.
 - `data.py`: `load_families`, `FamilyData`, AleRax-style family filtering.
 - `config/`: `GpurecConfig` and its TOML loader (`load_fit_config`);
   `config/defaults.toml` documents every field.
-- `cli/`: the `gpurec` command line (AleRax-compatible arguments).
+- `cli/`: the `gpurec` command line (AleRax-compatible arguments), and
+  `gale simulate` (`cli/simulate.py`).
+- `simulate.py`: the gene-family simulator (`simulate_families`,
+  `simulate_family_arrays`); the simulation itself is in
+  `crates/gpurec-backtrack/src/simulate.rs`.
 - `io/`: families-file, mapping-file and AleRax-output-file readers/writers
   (`write_alerax`).
 - `reconciliation/`: `ReconciledGeneTree`, the reconciliation-sample writers

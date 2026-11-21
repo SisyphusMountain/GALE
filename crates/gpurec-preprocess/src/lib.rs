@@ -128,6 +128,7 @@ fn gpurec_preprocess(_py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<
     module.add_function(wrap_pyfunction!(plan_batch_layouts, module)?)?;
     module.add_function(wrap_pyfunction!(build_family_ccp, module)?)?;
     module.add_function(wrap_pyfunction!(species_leaf_index_map, module)?)?;
+    module.add_function(wrap_pyfunction!(species_payload, module)?)?;
     module.add_class::<FamilyCcp>()?;
     Ok(())
 }
@@ -2337,6 +2338,16 @@ fn species_leaf_index_map(species_path: String) -> PyResult<String> {
         })
         .collect();
     Ok(json!(map).to_string())
+}
+
+/// The species-tree arrays of a species tree file alone (`S`, `names`, `lengths`, `sp_child1`,
+/// `sp_child2`, ...) as JSON text: the `species` entry of `preprocess_dataset`'s output, for a
+/// program that reads no gene family (the simulator, `gpurec.simulate`).
+#[pyfunction]
+fn species_payload(species_path: String) -> PyResult<String> {
+    let tree = parse_one_newick_file(Path::new(&species_path))?;
+    let (species, _leaf_species_index) = build_species_output(&tree);
+    Ok(species.to_string())
 }
 
 #[cfg(test)]

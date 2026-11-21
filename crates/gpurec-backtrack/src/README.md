@@ -9,6 +9,9 @@ The crate is exposed to Python through PyO3 and consumes NumPy views prepared by
 - `lib.rs`: defines the PyO3 module, input views, species-topology helpers,
   seeded sampler, log-space weighted sampling, and event expansion for leaf,
   speciation, duplication, transfer, and loss nodes.
+- `simulate.rs`: the gene-family simulator (`simulate_arrays`, used by
+  `gpurec.simulate`): draws families forward under the undated DTL model and
+  returns them as flat arrays, in the sampler's node format.
 
 The sampler reads dynamic-programming tensors computed by the Python/Triton
 forward path.  It does not recompute the likelihood; it stochastically

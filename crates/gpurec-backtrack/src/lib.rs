@@ -7,6 +7,8 @@ use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
 
+mod simulate;
+
 const NEG_INF: f64 = f64::NEG_INFINITY;
 /// Base-2 logarithm of 2, added to the weight of a duplication whose two copies carry the two child
 /// clades of a gene split: the two ways of giving the two clades to the two copies are two distinct
@@ -1051,6 +1053,7 @@ fn gpurec_backtrack(_py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<(
     module.add_function(wrap_pyfunction!(sample_reconciliations_torch, module)?)?;
     module.add_function(wrap_pyfunction!(sample_family_counts, module)?)?;
     module.add_function(wrap_pyfunction!(sample_reconciliations_many, module)?)?;
+    module.add_function(wrap_pyfunction!(simulate::simulate_arrays, module)?)?;
     Ok(())
 }
 
