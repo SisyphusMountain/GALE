@@ -18,6 +18,9 @@ benchmarks) is:
   4. **pi-tier escalation** -- the bulk runs at a cheap forward pi (16) with the adjoint **warm-start**
      (``SolverOptions.warm_adjoint``, memory-gated automatically -- see ``gpurec.core.memory_policy``);
      only the forward-stiff families escalate to the accurate pi (64).
+  5. **Escape from a stop on a slope** -- a rate near 0 whose slope in rate units still says "rise"
+     is tried at larger values and the family fitted again from the best try
+     (``GENEWISE_ESCAPE_REFERENCE``).
 
 Returns a dict with the fitted log2-rates ``theta`` ([F,3]), the AleRax-comparable ``rates`` (= 2**theta,
 relative to speciation), the rebatch/defer history, and -- when ``certify=True`` -- a final cold PD
@@ -56,12 +59,38 @@ _BASE_SOLVER = {
 # Reference recipe tuned for the standard genewise problem. Import and clone-override per dataset:
 #   fit_genewise(sp, genes, **{**GENEWISE_REFERENCE, "tol": 5e-4})
 # Per-dataset values belong in your experiment script, NOT edited here.
+# The escape from a stop on a slope (``escape`` of fit_genewise). The stop tests the slope in log2
+# units, which is the slope in rate units times the rate times ln 2: near a rate of 0 it is tiny even
+# when the likelihood still rises steeply with the rate, and the fit stops on that slope (HOGENOM
+# CLU_000038_1_1_C stopped at D = 0.00037, slope 2 bits per unit of D upwards; nine of the 10,869
+# HOGENOM families did). After the fit, a rate below ``max_rate`` whose slope in rate units says the
+# loss falls by more than ``min_slope`` bits per unit of rate as it rises is tried at each of
+# ``factors`` times its value (at most ``max_try``); a family whose best try lowers its loss by more
+# than ``min_gain`` bits is fitted again from there, without the Adam warm-up. Rates that want to fall
+# are never tried: a peak with a rate at the bound is left as it is.
+GENEWISE_ESCAPE_REFERENCE = dict(max_rate=0.01, min_slope=0.01, factors=(10.0, 100.0, 1000.0),
+                                 max_try=0.1, min_gain=1e-3)
+LN2 = math.log(2.0)
+
 GENEWISE_REFERENCE = dict(
     adam_steps=5, adam_lr=1.0, grad_clip=10.0, pi_tiers=(16, 64), neu_opt=16, neu_cert=64,
     tol=1e-3, max_iter=120, check_every=4, drop_frac=0.30, trust=2.0,
     mu=1e-2, fwd_tol=1e-3, improve_frac=0.8, verify_drop=True, eager_defer=True,
-    warm_adjoint=True, certify=False,
+    warm_adjoint=True, certify=False, escape=GENEWISE_ESCAPE_REFERENCE,
 )
+
+
+class _FamilySubset:
+    """The families of ``data`` at ``indices``, as fit_genewise uses them (its refit of escaped
+    families)."""
+
+    def __init__(self, data, indices):
+        self._data, self._indices = data, list(indices)
+        self.n_families = len(self._indices)
+
+    def build_model(self, indices, mode, solver_options, config, clade_budget):
+        return self._data.build_model([self._indices[i] for i in indices], mode, solver_options,
+                                      config, clade_budget)
 
 
 def _analytic_hessian(m, theta, pi_cur):
@@ -120,6 +149,7 @@ def fit_genewise(
     eager_defer: bool = True,
     warm_adjoint: bool = True,
     certify: bool = False,
+    escape: dict | None,
     verbose: bool = False,
 ) -> dict:
     """Fit per-family DTL rates to a converged, box-bounded optimum. See module docstring for the recipe.
@@ -133,6 +163,11 @@ def fit_genewise(
     (unused -- this recipe has no regularization term); ``config.memory`` (the adjoint warm-start is
     controlled by this recipe's own ``warm_adjoint`` argument, threaded into each build's
     ``SolverOptions.warm_adjoint``, + the library's own memory gate, not ``config.memory``).
+
+    ``escape``: the settings of the escape from a stop on a slope (``GENEWISE_ESCAPE_REFERENCE``
+    says what it does), or None for no escape. It reuses the slopes measured when each family was
+    frozen; only the families never frozen get one more pass, at the check settings. The result's
+    ``escape`` gives the flagged and refitted families.
     """
     dev = cuda_device()
     dtype = config.precision.model_torch_dtype
@@ -187,6 +222,11 @@ def fit_genewise(
     active = torch.arange(F_all, device=dev)
     was_dropped = torch.zeros(F_all, dtype=torch.bool, device=dev)
     pg_last = torch.full((F_all,), float("inf"), device=dev, dtype=dtype)
+    # The loss and slope measured when each family was frozen (at the check settings with
+    # verify_drop), for the escape.
+    final_loss = torch.zeros(F_all, device=dev, dtype=dtype)
+    final_g = torch.zeros(F_all, 3, device=dev, dtype=dtype)
+    have_final = torch.zeros(F_all, dtype=torch.bool, device=dev)
     rebatch_log, defer_log = [], []
     n_steps = n_builds = 0
 
@@ -231,9 +271,11 @@ def fit_genewise(
                      f"|Pg|max={float(pgm.max()):.2e}")
                 if frac > drop_frac and bool(conv.any()):
                     cert_ok = conv.clone()
+                    lv_drop, g_drop = lv, g
                     if verify_drop:   # re-check the converged subset cold at the high tier before freezing
                         m.solver_options = sopts(cert_pi, neu_cert, False)
-                        cert_ok = conv & (pgmax(sub, lg(m, sub)[1]) < tol)
+                        lv_drop, g_drop = lg(m, sub)
+                        cert_ok = conv & (pgmax(sub, g_drop) < tol)
                         m.solver_options = sopts(pi_cur, neu_opt, warm_adjoint)
                     drop = cert_ok
                     defer = torch.zeros_like(conv)
@@ -248,6 +290,9 @@ def fit_genewise(
                     if bool(drop.any()) or bool(defer.any()):
                         if bool(drop.any()):
                             theta.index_copy_(0, active[drop], sub[drop]); was_dropped[active[drop]] = True
+                            final_loss.index_copy_(0, active[drop], lv_drop[drop])
+                            final_g.index_copy_(0, active[drop], g_drop[drop])
+                            have_final[active[drop]] = True
                             rebatch_log.append(dict(pi=pi_cur, it=it, dropped=int(drop.sum()),
                                                     remain=int((~drop & ~defer).sum())))
                         if bool(defer.any()):
@@ -278,10 +323,55 @@ def fit_genewise(
             carry = torch.cat([carry, active])
         del m; torch.cuda.empty_cache()
 
+    escape_log = None
+    if escape is not None:
+        t_escape = time.perf_counter()
+        missing = torch.nonzero(~have_final).flatten()
+        if missing.numel():   # never frozen (stopped at max_iter): one pass at the check settings
+            m = build(missing.tolist(), cert_pi, neu_cert, False); n_builds += 1
+            lv_m, g_m = lg(m, theta.index_select(0, missing))
+            final_loss.index_copy_(0, missing, lv_m); final_g.index_copy_(0, missing, g_m)
+            del m; torch.cuda.empty_cache()
+        rates = torch.exp2(theta)
+        slope = final_g / (rates * LN2)   # bits per unit of rate; negative: the loss falls as it rises
+        flag = (rates < escape["max_rate"]) & (slope < -escape["min_slope"])
+        rows = torch.nonzero(flag.any(dim=1)).flatten()
+        kept = rows[:0]
+        if rows.numel():
+            m = build(rows.tolist(), cert_pi, neu_cert, False); n_builds += 1
+            th0, fl = theta.index_select(0, rows), flag.index_select(0, rows)
+            loss0 = final_loss.index_select(0, rows)
+            best_loss, best_theta = loss0.clone(), th0.clone()
+            for factor in escape["factors"]:
+                tried = torch.log2((torch.exp2(th0) * factor).clamp(max=escape["max_try"]))
+                trial = clamp_(torch.where(fl, tried, th0))
+                loss_t, _g, _r = m.genewise_loss_vector_and_grad(theta=trial, need_grad=False)
+                loss_t = loss_t.to(dtype)
+                better = loss_t < best_loss
+                best_loss = torch.where(better, loss_t, best_loss)
+                best_theta = torch.where(better.unsqueeze(1), trial, best_theta)
+            del m; torch.cuda.empty_cache()
+            keep = (loss0 - best_loss) > escape["min_gain"]
+            kept = rows[keep]
+            _log(f"[fit_genewise] escape: {int(flag.sum())} rates flagged in {rows.numel()} families, "
+                 f"{kept.numel()} refitted")
+            if kept.numel():
+                again = fit_genewise(
+                    _FamilySubset(data, kept.tolist()), start_log2_rates=best_theta[keep],
+                    config=config, adam_steps=0, adam_lr=adam_lr, grad_clip=grad_clip,
+                    pi_tiers=pi_tiers, neu_opt=neu_opt, neu_cert=neu_cert, tol=tol, max_iter=max_iter,
+                    check_every=check_every, drop_frac=drop_frac, trust=trust, mu=mu, fwd_tol=fwd_tol,
+                    improve_frac=improve_frac, verify_drop=verify_drop, eager_defer=eager_defer,
+                    warm_adjoint=warm_adjoint, certify=False, escape=None, verbose=verbose)
+                theta.index_copy_(0, kept, again["theta"].to(device=dev, dtype=dtype))
+                n_steps += again["n_steps"]; n_builds += again["n_builds"]
+        escape_log = dict(flagged_rates=int(flag.sum()), flagged_families=rows.tolist(),
+                          refitted=kept.tolist(), seconds=time.perf_counter() - t_escape)
+
     result = dict(
         theta=theta, rates=torch.exp2(theta), n_families=F_all,
         opt_seconds=time.perf_counter() - t0, n_steps=n_steps, n_builds=n_builds,
-        history=dict(rebatch=rebatch_log, defer=defer_log),
+        history=dict(rebatch=rebatch_log, defer=defer_log), escape=escape_log,
     )
     if certify:   # final cold PD certificate over ALL families at the high pi/Neumann tier
         mfull = build(range(F_all), cert_pi, neu_cert, False)

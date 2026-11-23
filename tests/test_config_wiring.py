@@ -195,7 +195,7 @@ def _run_fit_genewise_capture(monkeypatch, **kwargs):
     start = torch.full((1, 3), -100.0, dtype=torch.float64)
     res = fit_genewise(
         data, start_log2_rates=start, adam_steps=0, pi_tiers=(16,),
-        max_iter=0, certify=False, verbose=False, **kwargs,
+        max_iter=0, certify=False, escape=None, verbose=False, **kwargs,
     )
     return captured["solver_options"], res
 

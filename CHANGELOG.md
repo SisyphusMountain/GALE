@@ -21,6 +21,20 @@
   against the extinction probability, and agreement with an earlier simulator written independently
   in Python.
 
+### Fixed
+- **The per-family fit no longer stops on a slope when a rate is near 0.** It stops when the slope in
+  log2 units is below 1e-3, and that slope is the slope in rate units times the rate times ln 2: near a
+  rate of 0 it is tiny even when the likelihood still rises steeply with the rate. HOGENOM
+  CLU_000038_1_1_C stopped at a duplication rate of 0.00037 although the likelihood rose by 2 bits per
+  unit of it; the top is at 0.18, 0.49 nats higher (AleRax finds it). Nine of the 10,869 HOGENOM
+  families stopped this way. After the fit, `fit_genewise` now looks at every rate below 0.01 whose
+  slope in rate units says the likelihood rises with it, tries it at 10, 100 and 1000 times its value
+  (at most 0.1), and fits the family again from the best try when it raises the likelihood by more
+  than 0.001 bits. It reuses the slopes measured when each family converged, so only the few refitted
+  families cost time. Rates that want to fall are never tried, so a peak with a rate at 0 is left as it
+  is. `fit_genewise` takes a new required argument `escape` (`GENEWISE_REFERENCE["escape"]`, or `None`
+  for no escape); its result gives the flagged and refitted families.
+
 ### Changed
 - **`load_families` refuses a `max_clade_split_ratio` of 0 or less.** It used to take it as a limit and drop
   every family ("no gene family is left after filtering"); AleRax's convention, where such a value on the

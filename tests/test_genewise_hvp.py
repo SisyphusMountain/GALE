@@ -386,14 +386,14 @@ def test_fit_genewise_converges_on_small_fixture(tmp_path):
     after swapping the Hessian source, since the swap must not change the recipe's behavior
     contract, only its internal Hessian construction."""
     from gpurec.config import GpurecConfig
-    from gpurec.fit.genewise_fit import fit_genewise
+    from gpurec.fit.genewise_fit import GENEWISE_REFERENCE, fit_genewise
 
     data = _repeated_family_data(tmp_path, 4)
     start = torch.zeros(data.n_families, 3, dtype=torch.float64)
     res = fit_genewise(
         data, start_log2_rates=start, config=GpurecConfig.genewise_reference(),
         adam_steps=5, pi_tiers=(16,), neu_opt=16, neu_cert=16,
-        max_iter=60, certify=True, verbose=False,
+        max_iter=60, certify=True, escape=GENEWISE_REFERENCE["escape"], verbose=False,
     )
     assert res["n_families"] == 4
     assert torch.isfinite(res["theta"]).all()
@@ -412,7 +412,7 @@ def test_fit_genewise_converges_with_multibatch_analytic_hvp(tmp_path):
     per-family thetas would stop matching each other -- a robust, cheap way to catch attribution
     bugs without needing distinct per-family ground truth."""
     from gpurec.config import GpurecConfig
-    from gpurec.fit.genewise_fit import fit_genewise
+    from gpurec.fit.genewise_fit import GENEWISE_REFERENCE, fit_genewise
     from gpurec import GeneReconModel, SolverOptions
 
     n_fam = 6
@@ -438,7 +438,7 @@ def test_fit_genewise_converges_with_multibatch_analytic_hvp(tmp_path):
     res = fit_genewise(
         data, start_log2_rates=start, config=config,
         adam_steps=5, pi_tiers=(16,), neu_opt=16, neu_cert=16,
-        max_iter=60, certify=True, verbose=False,
+        max_iter=60, certify=True, escape=GENEWISE_REFERENCE["escape"], verbose=False,
     )
     assert res["n_families"] == n_fam
     assert torch.isfinite(res["theta"]).all()

@@ -10,7 +10,7 @@ import torch
 from gpurec.api.model import GeneReconModel
 from gpurec.config import GpurecConfig
 from gpurec.data import FamilyData
-from gpurec.fit.genewise_fit import fit_genewise
+from gpurec.fit.genewise_fit import GENEWISE_REFERENCE, fit_genewise
 from gpurec.fit.global_fit import fit_global
 
 LN2 = math.log(2.0)
@@ -92,6 +92,7 @@ def fit(data: FamilyData, parametrization: str, start_rates, config: GpurecConfi
             start_log2_rates=start.reshape(1, 3).expand(data.n_families, 3).clone(),
             config=config,
             certify=False,
+            escape=GENEWISE_REFERENCE["escape"],
             verbose=True,
         )
         log2_rates = res["theta"].detach().double().cpu()

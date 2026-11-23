@@ -48,7 +48,7 @@ def test_fit_genewise_still_uses_1e6_2p0_box(tmp_path):
     start = torch.zeros(data.n_families, 3, dtype=torch.float64)
     res = fit_genewise(data, start_log2_rates=start, config=GpurecConfig.genewise_reference(),
                         adam_steps=1, pi_tiers=(16,), max_iter=2, check_every=1,
-                        verify_drop=False, certify=True)
+                        verify_drop=False, certify=True, escape=None)
     theta = res["theta"]
     lo, hi = math.log2(1e-6), math.log2(2.0)
     assert torch.isfinite(theta).all()
@@ -70,4 +70,4 @@ def test_fit_genewise_rejects_an_uncapped_rate_box():
     data = family_data(f"{d}/sp.nwk", [f"{d}/g.nwk"])
     start = torch.zeros(data.n_families, 3, dtype=torch.float64)
     with pytest.raises(ValueError, match="max_rate"):
-        fit_genewise(data, start_log2_rates=start, config=GpurecConfig())
+        fit_genewise(data, start_log2_rates=start, config=GpurecConfig(), escape=None)
